@@ -28,6 +28,7 @@ class PracticeHistory(db.Model):
     score = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow) # Renamed from date
     scenario_type = db.Column(db.String(50), nullable=False)
+    framework = db.Column(db.String(255), nullable=True) # Added framework support
 
     role = db.Column(db.String(100))
     ai_role = db.Column(db.String(100))
@@ -44,12 +45,14 @@ class PracticeHistory(db.Model):
 
     def to_dict(self):
         return {
+            "id": self.session_id,
             "session_id": self.session_id,
             "user_id": self.user_id,
             "scenario": self.scenario,
             "title": self.title, # Include in dict
             "date": self.created_at.isoformat() if self.created_at else None,
             "scenario_type": self.scenario_type,
+            "framework": self.framework,
 
             "role": self.role,
             "ai_role": self.ai_role,
@@ -166,6 +169,7 @@ def create_session(session_id, data, user_id=None):
 
         scenario=data.get("scenario"), # Renamed from scenario_id
         scenario_type=data.get("scenario_type", "custom"),
+        framework=data.get("framework"), # Store framework
         role=data.get("role"),
         ai_role=data.get("ai_role"),
         title=data.get("title"), # Store title
