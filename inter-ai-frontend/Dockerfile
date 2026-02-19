@@ -18,6 +18,9 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
+# Install openssl for self-signed cert generation fallback
+RUN apk add --no-cache openssl
+
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Remove default nginx config
@@ -26,9 +29,13 @@ RUN rm /etc/nginx/conf.d/default.conf
 # Add our custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Add entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:80/health || exit 1
 
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 80 443
+CMD ["/docker-entrypoint.sh"]
 
