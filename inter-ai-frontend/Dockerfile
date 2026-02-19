@@ -27,6 +27,10 @@ RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 RUN sed -i 's/\r$//' /etc/nginx/conf.d/default.conf
 
+# Add HTTP-only config (for fallback)
+COPY nginx.http.conf /etc/nginx/nginx.http.conf
+RUN sed -i 's/\r$//' /etc/nginx/nginx.http.conf
+
 # Add entrypoint script (fix Windows CRLF line endings)
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
