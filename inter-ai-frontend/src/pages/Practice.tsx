@@ -251,7 +251,7 @@ export default function Practice() {
                                 role: "Senior AI Coach",
                                 desc: "Fully adaptive roleplay partner. Shifts dynamically between evaluation and mentorship.",
                                 img: "/alex.png",
-                                voice: "Deep Male Voice (Onyx)",
+                                voice: "Male Voice (Fable)",
                                 color: "blue",
                                 traits: ["Scenario Adaptive", "Real-time Feedback", "Role Improvisation"]
                             },
@@ -261,7 +261,7 @@ export default function Practice() {
                                 role: "Senior AI Coach",
                                 desc: "Fully adaptive roleplay partner. Shifts dynamically between evaluation and mentorship.",
                                 img: "/sarah.png",
-                                voice: "Natural Female Voice (Nova)",
+                                voice: "Female Voice (Nova)",
                                 color: "purple",
                                 traits: ["Scenario Adaptive", "Real-time Feedback", "Role Improvisation"]
                             }

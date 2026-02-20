@@ -10,7 +10,7 @@ import flask_cors
 import io
 from dotenv import load_dotenv
 from openai import AzureOpenAI, OpenAI
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+
 
 
 load_dotenv()
@@ -165,8 +165,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 QUESTIONS_FILE = os.path.join(BASE_DIR, "framework_questions.json")
 
-connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-CONTAINER_NAME = "coact-ai-reports"
+
 MAX_TURNS = 15 
 
 if os.getenv("AZURE_OPENAI_ENDPOINT"):
@@ -179,53 +178,8 @@ if os.getenv("AZURE_OPENAI_ENDPOINT"):
 else:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# --- Azure Blob Storage Client ---
-blob_service_client = None
-if connection_string:
-    try:
-        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-        # Ensure container exists
-        try:
-            container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-            if not container_client.exists():
-                container_client.create_container()
-        except Exception as e:
-             print(f"Error checking/creating container: {e}")
-    except Exception as e:
-        print(f"Error initializing Blob Service Client: {e}")
 
-def upload_report_to_blob(local_path, blob_name):
-    """Upload PDF to Azure Blob and return a SAS URL."""
-    if not blob_service_client:
-        return None
-    
-    try:
-        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=blob_name)
-        
-        with open(local_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-            
-        print(f" [SUCCESS] Uploaded {blob_name} to Azure Blob Storage.")
-        
-        # Generate SAS URL (valid for 24 hours)
-        sas_token = generate_blob_sas(
-            account_name=blob_service_client.account_name,
-            container_name=CONTAINER_NAME,
-            blob_name=blob_name,
-            account_key=blob_service_client.credential.account_key,
-            permission=BlobSasPermissions(read=True),
-            expiry=dt.datetime.utcnow() + dt.timedelta(hours=24)
-        )
-        
-        # Construct URL
-        # blob_client.url gives the primary endpoint URL + blob name
-        # We append the SAS token
-        sas_url = f"{blob_client.url}?{sas_token}"
-        return sas_url
-        
-    except Exception as e:
-        print(f" [ERROR] Failed to upload/generate SAS for {blob_name}: {e}")
-        return None
+
 
 # ---------------------------------------------------------
 # Load Questions from JSON (RAG)
@@ -1010,9 +964,11 @@ def chat(session_id: str):
         detected_fw = detect_framework_fallback(clean_response)
     
     if detected_fw: 
-        counts = sess["meta"].get("framework_counts", {})
+        meta = sess.get("meta", {"framework_counts": {}, "relevance_issues": 0})
+        counts = meta.get("framework_counts", {})
         counts[detected_fw] = counts.get(detected_fw, 0) + 1
-        sess["meta"]["framework_counts"] = counts
+        meta["framework_counts"] = counts
+        sess["meta"] = meta
         
     # Persist response
     sess["transcript"].append({"role": "assistant", "content": raw_response})
@@ -1023,7 +979,7 @@ def chat(session_id: str):
     return jsonify({
         "follow_up": clean_response, 
         "framework_detected": detected_fw,
-        "framework_counts": sess["meta"].get("framework_counts", {})
+        "framework_counts": sess.get("meta", {}).get("framework_counts", {})
     })
 
 @app.post("/api/session/<session_id>/complete")
@@ -1040,7 +996,7 @@ def complete_session(session_id: str):
         framework_data = sess["framework"]
 
     if isinstance(framework_data, list):
-        counts = sess["meta"].get("framework_counts", {})
+        counts = sess.get("meta", {}).get("framework_counts", {})
         usage_str = ", ".join([f"{k}:{v}" for k,v in counts.items()])
         fw_display = f"Multi-Framework ({usage_str})"
     else:
@@ -1105,17 +1061,7 @@ def complete_session(session_id: str):
     sess["completed"] = True
     sess["report_file"] = report_path
     
-    # --- UPLOAD TO BLOB STORAGE ---
-    blob_name = f"{session_id}_{int(dt.datetime.utcnow().timestamp())}.pdf"
-    sas_url = upload_report_to_blob(report_path, blob_name)
-    
-    if sas_url:
-        print(f" [INFO] specific report URL generated: {sas_url[:50]}...")
-        sess["report_file"] = sas_url # Save URL instead of local path
-        # Optionally delete local file to save space? 
-        # os.remove(report_path) 
-    else:
-        print(" [WARNING] Failed to upload report to blob. Keeping local path.")
+
     
     # --- PERSISTENCE LAYER ---
     try:
@@ -1175,17 +1121,18 @@ def complete_session(session_id: str):
 
 @app.get("/api/report/<session_id>")
 def view_report(session_id: str):
-    sess = SESSIONS.get(session_id)
+    sess = get_session(session_id)
     if not sess: 
         return jsonify({"error": "No report"}), 404
-        
+    
+    # Try the in-memory stored path first
     report_path = sess.get("report_file")
     
-    # If it's a URL (starts with http), redirect or return it
-    if report_path and report_path.startswith("http"):
-        return jsonify({"url": report_path, "redirect": True})
-
+    # If not found (e.g. DB-loaded session), reconstruct the expected path
     if not report_path or not os.path.exists(report_path):
+        report_path = os.path.join(ensure_reports_dir(), f"{session_id}_report.pdf")
+    
+    if not os.path.exists(report_path):
         return jsonify({"error": "Report file not found"}), 404
     
     return send_file(report_path, mimetype='application/pdf')

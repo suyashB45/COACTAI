@@ -61,6 +61,8 @@ export default function Conversation() {
         showTranscript: false,
     })
     const [isAiSpeaking, setIsAiSpeaking] = useState(false)
+    const [showEndConfirm, setShowEndConfirm] = useState(false)
+    const [isEnding, setIsEnding] = useState(false)
 
     // Scroll to bottom of transcript only if it's open
     useEffect(() => {
@@ -90,7 +92,7 @@ export default function Conversation() {
             // Determine voice based on character
             // Use forcedCharacter if provided (fixes race condition on mount)
             const character = forcedCharacter || state.sessionData?.ai_character || 'alex'
-            const voice = character === 'alex' ? 'onyx' : 'nova'
+            const voice = character === 'alex' ? 'fable' : 'nova'
 
             setIsAiSpeaking(true)
 
@@ -365,6 +367,10 @@ export default function Conversation() {
     }
 
     const handleEndConversation = async () => {
+        if (isEnding) return // Prevent double-clicks
+        setIsEnding(true)
+        setShowEndConfirm(false)
+
         if (aiAudioRef.current) {
             aiAudioRef.current.pause()
         }
@@ -440,10 +446,11 @@ export default function Conversation() {
                     </Button>
                     <Button
                         variant="destructive"
-                        onClick={handleEndConversation}
-                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-full px-4 sm:px-6 text-sm font-semibold backdrop-blur-md transition-all duration-300"
+                        onClick={() => setShowEndConfirm(true)}
+                        disabled={isEnding}
+                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-full px-4 sm:px-6 text-sm font-semibold backdrop-blur-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        End Session
+                        {isEnding ? 'Ending...' : 'End Session'}
                     </Button>
                 </div>
             </header>
@@ -571,53 +578,66 @@ export default function Conversation() {
                     </motion.div>
                 </div>
 
-                {/* Subtitles / Captions */}
-                <div className="max-w-4xl w-full text-center px-4 min-h-[140px] flex flex-col items-center justify-start relative z-20">
+                {/* AI Spoken Text Box */}
+                <div className="max-w-2xl w-full px-4 relative z-20">
                     <AnimatePresence mode="wait">
                         {state.currentDraft ? (
                             <motion.div
                                 key="draft"
-                                initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-                                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                                exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
-                                className="relative"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="bg-card/80 backdrop-blur-xl border border-border rounded-2xl p-5 sm:p-6 shadow-lg"
                             >
-                                <p className="text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground leading-tight tracking-tight">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                                    <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Listening...</span>
+                                </div>
+                                <p className="text-base sm:text-lg text-foreground leading-relaxed">
                                     "{state.currentDraft}"
-                                    <span className="inline-block w-3 h-8 bg-primary rounded-full animate-pulse ml-2 align-middle shadow-[0_0_10px_oklch(from_var(--primary)_l_c_h_/_0.5)]" />
+                                    <span className="inline-block w-2 h-5 bg-primary rounded-full animate-pulse ml-1 align-middle" />
                                 </p>
-                                <p className="text-xs sm:text-sm text-muted-foreground mt-4 font-medium uppercase tracking-widest">Listening...</p>
                             </motion.div>
                         ) : lastMessage ? (
                             <motion.div
                                 key="last-msg"
-                                initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-                                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                                exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
-                                className="relative"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className={`backdrop-blur-xl border rounded-2xl p-5 sm:p-6 shadow-lg max-h-[200px] overflow-y-auto ${lastMessage.role === 'assistant'
+                                        ? 'bg-primary/5 border-primary/20'
+                                        : 'bg-card/80 border-border'
+                                    }`}
                             >
-                                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-6 border ${lastMessage.role === 'assistant'
-                                    ? 'bg-primary/10 border-primary/20 text-primary'
-                                    : 'bg-muted/50 border-border text-muted-foreground'
-                                    }`}>
-                                    {lastMessage.role === 'assistant' ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                                    {lastMessage.role === 'assistant' ? 'AI Coach' : 'You'}
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className={`p-1.5 rounded-lg ${lastMessage.role === 'assistant' ? 'bg-primary/10' : 'bg-muted/50'}`}>
+                                        {lastMessage.role === 'assistant' ? <Bot className="w-3.5 h-3.5 text-primary" /> : <User className="w-3.5 h-3.5 text-muted-foreground" />}
+                                    </div>
+                                    <span className={`text-xs font-bold uppercase tracking-widest ${lastMessage.role === 'assistant' ? 'text-primary' : 'text-muted-foreground'}`}>
+                                        {lastMessage.role === 'assistant' ? 'AI Coach' : 'You'}
+                                    </span>
+                                    {lastMessage.role === 'assistant' && isAiSpeaking && (
+                                        <div className="flex items-center gap-0.5 ml-auto">
+                                            {[...Array(4)].map((_, i) => (
+                                                <div key={i} className="w-1 bg-primary rounded-full animate-pulse" style={{ height: `${8 + Math.random() * 8}px`, animationDelay: `${i * 0.15}s` }} />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-
-                                <p className={`text-xl sm:text-2xl md:text-4xl font-medium leading-tight tracking-tight ${lastMessage.role === 'assistant'
-                                    ? 'text-foreground font-semibold drop-shadow-sm'
-                                    : 'text-muted-foreground'
+                                <p className={`text-base sm:text-lg leading-relaxed ${lastMessage.role === 'assistant'
+                                        ? 'text-foreground font-medium'
+                                        : 'text-muted-foreground'
                                     }`}>
-                                    "{lastMessage.content}"
+                                    {lastMessage.content}
                                 </p>
                             </motion.div>
                         ) : (
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
-                                className="text-center"
+                                className="bg-card/50 backdrop-blur-xl border border-dashed border-border rounded-2xl p-5 sm:p-6 text-center"
                             >
-                                <p className="text-muted-foreground text-lg sm:text-xl font-medium">Tap the microphone to start the conversation</p>
+                                <p className="text-muted-foreground text-base font-medium">Tap the microphone to start the conversation</p>
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -734,6 +754,54 @@ export default function Conversation() {
                                     </motion.div>
                                 ))}
                                 <div ref={transcriptEndRef} />
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* End Session Confirmation Modal */}
+            <AnimatePresence>
+                {showEndConfirm && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowEndConfirm(false)}
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            className="relative bg-card border border-border rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl"
+                        >
+                            <div className="text-center">
+                                <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
+                                    <Square className="w-6 h-6 text-red-500" />
+                                </div>
+                                <h3 className="text-xl font-bold text-foreground mb-2">End Session?</h3>
+                                <p className="text-sm text-muted-foreground mb-8 leading-relaxed">
+                                    Are you sure you want to end this session? Your report will be generated automatically.
+                                </p>
+                                <div className="flex gap-3">
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => setShowEndConfirm(false)}
+                                        className="flex-1 rounded-xl border border-border hover:bg-muted/20 font-semibold"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={handleEndConversation}
+                                        className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20"
+                                    >
+                                        Yes, End Session
+                                    </Button>
+                                </div>
                             </div>
                         </motion.div>
                     </div>

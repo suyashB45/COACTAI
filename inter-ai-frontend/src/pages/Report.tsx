@@ -159,6 +159,20 @@ export default function Report() {
 
             const response = await fetch(getApiUrl(`/api/report/${sessionId}`), { headers })
             if (!response.ok) throw new Error("Failed to generate PDF")
+
+            const contentType = response.headers.get('content-type') || ''
+
+            // If backend returns a redirect URL (Blob Storage), open it directly
+            if (contentType.includes('application/json')) {
+                const jsonData = await response.json()
+                if (jsonData.url) {
+                    window.open(jsonData.url, '_blank')
+                    return
+                }
+                throw new Error("No report URL found")
+            }
+
+            // Otherwise, handle as binary PDF
             const blob = await response.blob()
             const url = window.URL.createObjectURL(blob)
             const a = document.createElement('a')
