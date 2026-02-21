@@ -59,21 +59,6 @@ interface GenericReportData {
     [key: string]: any
 }
 
-// Scenario 1: Coaching
-interface CoachingReportData extends GenericReportData {
-    scorecard: ScorecardItem[]
-    strengths: string[]
-    missed_opportunities: string[]
-    actionable_tips: string[]
-    eq_analysis?: { nuance: string; proof?: string; observation?: string; suggestion: string }[]
-}
-
-// Scenario 2: Sales
-interface SalesReportData extends GenericReportData {
-    scorecard: ScorecardItem[]
-    sales_recommendations: string[]
-    suggested_questions?: string[]
-}
 
 // Scenario 3: Learning
 interface LearningReportData extends GenericReportData {
@@ -280,11 +265,14 @@ export default function Report() {
     const type = (data.type || data.meta.scenario_type || 'custom').toLowerCase()
 
     const renderContent = () => {
-        if (data.executive_summary || type.includes('coaching_sim')) return <SimulationView data={data as SimulationReportData} />
-        if (type.includes('coaching')) return <CoachingView data={data as CoachingReportData} />
-        if (type.includes('sales') || type.includes('negotiation')) return <SalesView data={data as SalesReportData} />
-        if (type.includes('learning') || type.includes('reflection') || type.includes('mentorship')) return <LearningView data={data as LearningReportData} />
-        return <CustomView data={data as GenericReportData} />
+        if (type.includes('mentorship') || type.includes('learning') || type.includes('reflection')) {
+            // Narrative/reflective view for mentorship
+            return <LearningView data={data as LearningReportData} />
+        }
+
+        // ALL assessment scenarios use the rich SimulationView template
+        // (coaching_sim, coaching, sales, negotiation, custom)
+        return <SimulationView data={data as SimulationReportData} />
     }
 
     return (
@@ -764,85 +752,6 @@ const ScorecardSection = ({ items }: { items: ScorecardItem[] }) => (
 
 // --- VIEW COMPONENTS ---
 
-const CoachingView = ({ data }: { data: CoachingReportData }) => (
-    <div className="space-y-8">
-        <div className="grid lg:grid-cols-2 gap-8">
-            <ScorecardSection items={data.scorecard} />
-            <div className="space-y-8">
-                <DetailedAnalysisSection items={data.detailed_analysis as DetailedAnalysisItem[]} />
-                <EQAnalysisSection items={data.eq_analysis} />
-            </div>
-        </div>
-
-        <BehaviourAnalysisSection items={data.behaviour_analysis} />
-
-        {/* Enhanced Questions Section */}
-        {data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
-
-        <div className="grid md:grid-cols-2 gap-6">
-            <GlassCard>
-                <SectionHeader icon={CheckCircle2} title="Key Strengths" colorClass="text-emerald-500" bgClass="bg-emerald-500/10" />
-                <ul className="space-y-3">
-                    {data.strengths?.map((s, i) => (
-                        <li key={i} className="flex gap-3 text-sm text-foreground/90 bg-emerald-500/5 p-3 rounded-lg border border-emerald-500/10">
-                            <Check className="w-4 h-4 text-emerald-500 mt-0.5" /> {s}
-                        </li>
-                    ))}
-                </ul>
-            </GlassCard>
-            <GlassCard>
-                <SectionHeader icon={AlertTriangle} title="Missed Opportunities" colorClass="text-amber-500" bgClass="bg-amber-500/10" />
-                <ul className="space-y-3">
-                    {data.missed_opportunities?.map((s, i) => (
-                        <li key={i} className="flex gap-3 text-sm text-foreground/90 bg-amber-500/5 p-3 rounded-lg border border-amber-500/10">
-                            <X className="w-4 h-4 text-amber-500 mt-0.5" /> {s}
-                        </li>
-                    ))}
-                </ul>
-            </GlassCard>
-        </div>
-
-        <GlassCard className="border-t-4 border-t-purple-500">
-            <SectionHeader icon={Zap} title="Actionable Drills" colorClass="text-purple-500" bgClass="bg-purple-500/10" />
-            <div className="grid md:grid-cols-2 gap-6">
-                {data.actionable_tips?.map((tip, i) => (
-                    <div key={i} className="flex gap-4 p-4 rounded-xl bg-purple-500/5 border border-purple-500/10">
-                        <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0 text-purple-600 font-bold text-sm">#{i + 1}</div>
-                        <p className="text-sm text-foreground leading-relaxed font-medium">{tip}</p>
-                    </div>
-                ))}
-            </div>
-        </GlassCard>
-    </div>
-)
-
-const SalesView = ({ data }: { data: SalesReportData }) => (
-    <div className="space-y-8">
-        <div className="grid lg:grid-cols-2 gap-8">
-            <ScorecardSection items={data.scorecard} />
-            <div className="space-y-8">
-                <DetailedAnalysisSection items={data.detailed_analysis as DetailedAnalysisItem[]} />
-            </div>
-        </div>
-
-        <BehaviourAnalysisSection items={data.behaviour_analysis} />
-
-        {/* Enhanced Questions Section */}
-        {data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
-
-        <GlassCard>
-            <SectionHeader icon={Award} title="Strategic Recommendations" colorClass="text-emerald-500" bgClass="bg-emerald-500/10" />
-            <div className="grid md:grid-cols-2 gap-6">
-                {data.sales_recommendations?.map((rec, i) => (
-                    <div key={i} className="bg-background p-5 rounded-xl border border-border text-foreground text-sm leading-relaxed hover:shadow-md transition-shadow">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 mb-3" />
-                        {rec}
-                    </div>
-                ))}
-            </div>
-        </GlassCard>
-    </div>
-)
 
 const LearningView = ({ data }: { data: LearningReportData }) => (
     <div className="space-y-8">
@@ -895,22 +804,6 @@ const LearningView = ({ data }: { data: LearningReportData }) => (
     </div>
 )
 
-const CustomView = ({ data }: { data: GenericReportData }) => (
-    <div className="space-y-8">
-        <DetailedAnalysisSection items={data.detailed_analysis as DetailedAnalysisItem[]} />
-        <BehaviourAnalysisSection items={data.behaviour_analysis} />
-        {data.strengths_observed && (
-            <GlassCard>
-                <SectionHeader icon={CheckCircle2} title="Strengths Observed" />
-                <div className="flex flex-wrap gap-2">
-                    {data.strengths_observed.map((s: string, i: number) => (
-                        <span key={i} className="px-3 py-1 bg-emerald-500/10 text-emerald-600 rounded-full text-sm font-medium border border-emerald-500/20">{s}</span>
-                    ))}
-                </div>
-            </GlassCard>
-        )}
-    </div>
-)
 
 const SimulationView = ({ data }: { data: SimulationReportData }) => (
     <div className="space-y-8">

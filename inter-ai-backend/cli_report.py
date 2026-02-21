@@ -3430,30 +3430,16 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     stype = str(scenario_type).lower()
     
     try:
-        if 'coaching_sim' in stype or 'coaching' in stype:
-            # Scenarios 1 & 2: Same full 14-section SimulationView-aligned renderer
-            pdf.draw_coaching_sim_report(data)
-
-        elif 'mentorship' in stype:
+        if 'mentorship' in stype:
             # Mentorship: narrative, reflective, no scoring
             pdf.draw_context_summary()
             pdf.draw_mentorship_report(data)
-
-        elif 'sales' in stype or 'negotiation' in stype:
-            # Sales: assessment-style with scorecard
-            pdf.draw_context_summary()
-            pdf.draw_behaviour_analysis(data.get('behaviour_analysis', []))
-            pdf.draw_eq_analysis(data.get('eq_analysis', []))
-            pdf.draw_dynamic_questions(data.get('suggested_questions', []))
-            pdf.draw_assessment_report(data)
-            pdf.draw_scoring_methodology()
-
         else:
-            # Fallback custom
-            pdf.draw_context_summary()
-            pdf.draw_custom_report(data)
+            # ALL other scenarios (coaching_sim, coaching, sales, negotiation, custom)
+            # use the same rich 14-section SimulationView-aligned renderer
+            pdf.draw_coaching_sim_report(data)
 
-        # 3. Transcript always appended at the end
+        # Transcript always appended at the end
         if transcript:
             pdf.draw_transcript(transcript)
 

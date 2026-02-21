@@ -47,18 +47,6 @@ const DEFAULT_SCENARIOS = [
                 mode: "evaluation",
                 scenario_type: "negotiation",
                 session_mode: "skill_assessment"
-            },
-            {
-                title: "Scenario 3: Skill Development & Learning",
-                description: "You are the retail staff member receiving coaching from 'Coach Alex'. The goal is to reflect on a recent interaction, identify where you missed opportunities to ask questions, and practice better responses.",
-                ai_role: "Coach Alex",
-                user_role: "Retail Staff",
-                scenario: "CONTEXT: AI coach developing employee skills. \n\nFOCUS AREAS: Transitioning from feature-focused explanations to needs exploration and implementing conversational pauses. \n\nAI BEHAVIOR: Do NOT judge or score. Act as a supportive coach helping the user reflect on a recent interaction. Guide them to realize they need to ask more questions and pause more often.",
-                icon: "GraduationCap",
-                output_type: "learning_plan",
-                mode: "coaching",
-                scenario_type: "reflection",
-                session_mode: "practice"
             }
         ]
     },
