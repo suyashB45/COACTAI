@@ -10,7 +10,7 @@ import {
     Swords,
     UserCog,
     DollarSign, Users, ShoppingCart, GraduationCap, AlertTriangle, Check, ChevronDown, ChevronUp, Info,
-    Type, User, MessageSquare, BrainCircuit
+    Type, User, MessageSquare, BrainCircuit, Loader2
 } from "lucide-react"
 import Navigation from "../components/landing/Navigation"
 import { getApiUrl } from "../lib/api"
@@ -63,6 +63,25 @@ const DEFAULT_SCENARIOS = [
         ]
     },
     {
+        name: "Coaching Simulations",
+        color: "from-amber-500 to-orange-600",
+        scenarios: [
+            {
+                title: "Good Attitude, Poor Results",
+                description: "Coach a sincere employee who keeps missing targets. Improve performance without demotivating the employee.",
+                ai_role: "Sales Associate",
+                user_role: "Store Manager / Team Leader",
+                scenario: "CONTEXT: The employee is sincere and well-liked, but results have been consistently below target for the last 3 months. You need to coach them to understand the gap, identify root causes, and agree on a clear improvement plan.\n\nYOUR OBJECTIVES:\n1. Create a safe, respectful tone\n2. Use facts to discuss the performance gap\n3. Explore reasons behind the gap\n4. Agree on 2–3 actions and a follow-up plan",
+                icon: "Users",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-01-PERF-001"
+            }
+        ]
+    },
+    {
         name: "Expert Mentorship",
         color: "from-blue-600 to-cyan-500",
         scenarios: [
@@ -101,6 +120,7 @@ export default function Practice() {
     const [activeMode, setActiveMode] = useState<"practice" | "mentorship">("practice")
     const [expandedScenario, setExpandedScenario] = useState<string | null>(null)
     const [isStartingSession, setIsStartingSession] = useState(false)
+    const [startingScenarioTitle, setStartingScenarioTitle] = useState<string | null>(null)
 
     // Custom Scenario State
     const [customForm, setCustomForm] = useState({
@@ -145,12 +165,14 @@ export default function Practice() {
         session_mode?: string
         ai_character?: string
         title?: string
-        mode?: string // NEW
+        mode?: string
+        simulation_id?: string
     }) => {
         if (isStartingSession) return
 
         try {
             setIsStartingSession(true)
+            setStartingScenarioTitle(data.title || 'custom')
             // Call backend to create session
             const response = await fetch(getApiUrl('/session/start'), {
                 method: 'POST',
@@ -163,7 +185,8 @@ export default function Practice() {
                     scenario_type: data.scenario_type,
                     ai_character: data.ai_character || selectedCharacter,
                     title: data.title,
-                    mode: data.mode // Pass mode explicitly
+                    mode: data.mode,
+                    simulation_id: data.simulation_id
                 })
             })
 
@@ -200,6 +223,7 @@ export default function Practice() {
                 description: "Please make sure the backend is running."
             })
             setIsStartingSession(false)
+            setStartingScenarioTitle(null)
         }
     }
 
@@ -358,7 +382,7 @@ export default function Practice() {
                         </div>
 
                         {DEFAULT_SCENARIOS.filter(cat => {
-                            if (activeMode === 'practice') return cat.name.includes("Skill Assessment")
+                            if (activeMode === 'practice') return cat.name.includes("Skill Assessment") || cat.name.includes("Coaching Simulations")
                             if (activeMode === 'mentorship') return cat.name.includes("Mentorship")
                             return true
                         }).map((category, idx) => (
@@ -377,6 +401,7 @@ export default function Practice() {
                                             'negotiation': 'Negotiation',
                                             'reflection': 'Reflection',
                                             'mentorship': 'Mentorship',
+                                            'coaching_sim': 'Simulation',
                                             'custom': 'Custom'
                                         }
                                         const typeColors: any = {
@@ -384,6 +409,7 @@ export default function Practice() {
                                             'negotiation': 'bg-green-500/10 text-slate-900 dark:text-green-300 border-green-500/30',
                                             'reflection': 'bg-purple-500/10 text-slate-900 dark:text-purple-300 border-purple-500/30',
                                             'mentorship': 'bg-emerald-500/10 text-slate-900 dark:text-emerald-300 border-emerald-500/30',
+                                            'coaching_sim': 'bg-amber-500/10 text-slate-900 dark:text-amber-300 border-amber-500/30',
                                             'custom': 'bg-amber-500/10 text-slate-900 dark:text-amber-300 border-amber-500/20'
                                         }
                                         const typeIcons: any = {
@@ -391,6 +417,7 @@ export default function Practice() {
                                             'negotiation': ShoppingCart,
                                             'reflection': GraduationCap,
                                             'mentorship': UserCog,
+                                            'coaching_sim': Swords,
                                             'custom': Sparkles
                                         }
                                         const modeLabel = typeLabels[scenarioType] || 'Custom'
@@ -419,10 +446,17 @@ export default function Practice() {
                                                     session_mode: scenario.session_mode,
                                                     ai_character: selectedCharacter,
                                                     title: scenario.title,
-                                                    mode: scenario.mode // Pass explicit mode from scenario
+                                                    mode: scenario.mode,
+                                                    simulation_id: scenario.simulation_id
                                                 })}
                                                 className={`group relative p-6 bg-card/40 hover:bg-card/60 border border-border/50 hover:border-primary/30 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden ${isStartingSession ? 'opacity-70 pointer-events-none' : ''}`}
                                             >
+                                                {isStartingSession && startingScenarioTitle === scenario.title && (
+                                                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+                                                        <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
+                                                        <span className="text-sm font-bold text-primary">Starting...</span>
+                                                    </div>
+                                                )}
                                                 <div className={`absolute top-0 right-0 p-16 rounded-full blur-2xl opacity-0 group-hover:opacity-10 bg-gradient-to-br ${category.color} transition-opacity duration-500`} />
 
                                                 <div className="relative z-10">
@@ -659,8 +693,19 @@ export default function Practice() {
                                             disabled={isStartingSession}
                                             className="w-full sm:w-auto px-10 py-4 rounded-full bg-gradient-to-r from-primary to-purple-600 text-white font-bold tracking-wide shadow-xl shadow-primary/20 hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2.5"
                                         >
-                                            {isStartingSession ? 'Initializing Simulation...' : 'Start Simulation'}
-                                            {!isStartingSession && <Swords className="w-5 h-5" />}
+                                            {isStartingSession && startingScenarioTitle === customForm.title ? (
+                                                <>
+                                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                                    Initializing Simulation...
+                                                </>
+                                            ) : isStartingSession ? (
+                                                'Initializing Simulation...'
+                                            ) : (
+                                                <>
+                                                    Start Simulation
+                                                    <Swords className="w-5 h-5" />
+                                                </>
+                                            )}
                                         </button>
                                     </div>
                                 </div>

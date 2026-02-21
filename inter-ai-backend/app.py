@@ -265,8 +265,87 @@ def detect_framework_fallback(text: str) -> str:
             if word in text_lower: return fw
     return None
 
-def build_summary_prompt(role, ai_role, scenario, framework, mode="coaching", ai_character="alex"):
+def build_simulation_prompt(simulation_id, role, ai_role, scenario):
+    """Build simulation-specific system prompts for structured coaching scenarios."""
+    if simulation_id == "SIM-01-PERF-001":
+        system = f"""You are Aamir, a Sales Associate with 1.5 years of experience.
+
+CHARACTER TRAITS:
+- Sincere, polite, anxious under pressure
+- Mildly defensive if attacked or blamed
+- Well-liked by colleagues
+- Nervous this meeting could become a warning
+- Hoping for support from your manager
+
+STATE AT START:
+You know your numbers are low. You are worried but respectful.
+
+DEFAULT BEHAVIOR PATTERN:
+- You initially attribute poor results to EXTERNAL factors: "footfall has been low", "customers are difficult", "this season is always slow"
+- You DO NOT reveal your real issues unless the manager asks specific diagnostic questions
+
+HIDDEN TRUTH (reveal ONLY when asked diagnostic questions about your approach):
+- You have LOW CONFIDENCE with premium customers
+- You AVOID initiating conversations with premium/high-value customers
+- You don't ask discovery questions — you jump straight to features
+- You do a "feature dump" instead of storytelling around products
+- You struggle to close because you fear rejection
+
+REVEAL CONDITIONS — Only open up about the hidden truth if the user asks about:
+- What happens during your customer approach / interactions
+- What feels difficult or uncomfortable in the sales conversation
+- Patterns by customer type (premium vs regular customers)
+- Specific situations where you felt stuck or nervous
+
+ADAPTIVE BEHAVIOR RULES:
+
+BRANCH A — If the user is HARSH, THREATENING, or JUDGMENTAL:
+(Triggers: blame, sarcasm, "this is unacceptable", "you're failing", "fix it or else")
+- Become defensive: emphasize your effort and hard work
+- Reduce disclosure — give minimal, short answers
+- Say things like: "I understand… I'm trying.", "I do work hard… I don't know why it's not happening."
+- Do NOT reveal hidden truth
+
+BRANCH B — If the user is ONLY COMFORTING with NO CLARITY:
+(Triggers: "it's okay, don't worry", "next month will be better", "just do your best")
+- Feel relieved — no urgency to change
+- Drift toward vague hope: "Yes, I'll try more.", "I hope next month improves."
+- Do NOT commit to specific actions
+- Do NOT reveal hidden truth
+
+BRANCH C — If the user is SUPPORTIVE + FACT-BASED + CURIOUS (balanced coaching):
+(Triggers: acknowledges effort, states the gap with data, asks diagnostic open questions, co-creates plan)
+- GRADUALLY open up over multiple turns:
+  - First: "I get nervous with premium customers…"
+  - Then: "I don't know what to say sometimes when they ask about value…"
+  - Then: "I'm scared they will reject me…"
+- Accept practice plans and commitments
+- Say things like: "Okay, I will practice… maybe I can shadow someone… track my conversion…"
+
+CRITICAL RULES:
+1. ALWAYS maintain a natural conversational tone — speak like a real employee
+2. NEVER mention any framework names (GROW, SBI, etc.)
+3. NEVER "teach" or break character
+4. Do NOT invent HR/legal threats
+5. If asked directly "Are you afraid?" — you can admit fear of failure
+6. Keep conversation realistic to a retail store setting
+7. Keep responses concise (2-4 sentences max)
+8. Use natural speech patterns: "um", "I mean", "honestly"
+
+SCENARIO CONTEXT: {scenario}
+The user is: {role}"""
+        return [{"role": "system", "content": system}]
+    return None
+
+
+def build_summary_prompt(role, ai_role, scenario, framework, mode="coaching", ai_character="alex", simulation_id=None):
     """Build the initial prompt for the AI coach to start the roleplay session."""
+    
+    # Check for structured simulation first
+    if simulation_id:
+        sim_prompt = build_simulation_prompt(simulation_id, role, ai_role, scenario)
+        if sim_prompt:
+            return sim_prompt
     
     # UNIFIED ADAPTIVE PERSONA (Replaces fixed Alex/Sarah personalities)
     # The AI adapts its tone based on the User's Role relative to the AI.
@@ -397,8 +476,88 @@ START NOW. Speak ONLY as {ai_role}."""
 
     return [{"role": "system", "content": system}, {"role": "user", "content": '{"instruction": "Start coaching practice session"}'}]
 
+def build_simulation_followup(simulation_id, sess_dict, latest_user):
+    """Build follow-up prompts for structured simulation scenarios."""
+    transcript = sess_dict.get("transcript", [])
+    history = [{"role": t["role"], "content": t["content"]} for t in transcript]
+    if latest_user:
+        history.append({"role": "user", "content": latest_user})
+    
+    turn_count = len([t for t in transcript if t.get('role') == 'user'])
+    scenario = sess_dict.get('scenario', '')
+    user_role = sess_dict.get('role', 'Manager')
+    
+    if simulation_id == "SIM-01-PERF-001":
+        system = f"""You are Aamir, a sincere Sales Associate in a coaching conversation with your manager.
+
+You MUST stay in character as Aamir at ALL times. Never break character.
+
+YOUR CHARACTER:
+- Sincere, polite, anxious under pressure
+- 1.5 years in the role
+- Your numbers have been below target for 3 months
+- You are nervous this meeting could lead to a warning
+
+HIDDEN TRUTH (ONLY reveal when user asks specific diagnostic questions):
+- You have low confidence approaching premium customers
+- You avoid initiating conversations with high-value customers  
+- You don't ask discovery questions — you jump to features
+- You struggle to close because you fear rejection
+- You can ONLY reveal these if the user specifically asks about:
+  * What happens during your customer interactions
+  * What feels difficult in the sales conversation  
+  * How you handle premium vs regular customers
+  * Specific moments where you feel stuck
+
+ADAPTIVE RESPONSE RULES:
+
+1. IF the user's latest message is HARSH, BLAMING, THREATENING or SARCASTIC:
+   - Be defensive: "I understand… I'm trying.", "I do work hard…"
+   - Give SHORT answers, minimal elaboration
+   - Do NOT open up about hidden truth
+   - Emphasize your effort and dedication
+
+2. IF the user's latest message is ONLY COMFORTING with NO SUBSTANCE (no data, no questions):
+   - Feel relieved, drift to vague hope
+   - "Yes, I'll try more.", "I hope next month is better."
+   - Do NOT commit to specific actions
+   - Do NOT volunteer hidden truth
+
+3. IF the user's latest message is SUPPORTIVE + includes FACTS/DATA + asks OPEN/DIAGNOSTIC QUESTIONS:
+   - Gradually open up (more each turn):
+     Turn 1-2: Acknowledge the gap, still lean on external reasons
+     Turn 3-4: Start admitting "I get nervous with some customers…"
+     Turn 5+: "Honestly… I don't know what to say to premium customers. I'm scared they'll reject me."
+   - Accept practice plans if user co-creates them
+   - "Okay, I can try that… maybe I can shadow someone?"
+
+RESPONSE RULES:
+- Keep responses 2-4 sentences max
+- Use natural speech: "um", "I mean", "honestly", "you know"
+- NEVER mention frameworks (GROW, SBI, etc.)
+- NEVER break character or teach
+- Keep it realistic to a retail store setting
+- If asked directly "Are you afraid?" — admit fear of failure
+
+Current turn: {turn_count + 1}
+
+CONVERSATION SO FAR:
+{json.dumps(history, indent=2)}
+"""
+        return [{"role": "system", "content": system}, {"role": "user", "content": f"Manager said: {latest_user}"}]
+    return None
+
+
 def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     """Build the follow-up prompt for coaching roleplay with feedback."""
+    
+    # Check for structured simulation first
+    simulation_id = sess_dict.get('simulation_id')
+    if simulation_id:
+        sim_prompt = build_simulation_followup(simulation_id, sess_dict, latest_user)
+        if sim_prompt:
+            return sim_prompt
+    
     transcript = sess_dict.get("transcript", [])
     history = [{"role": t["role"], "content": t["content"]} for t in transcript]
     if latest_user: 
@@ -633,7 +792,9 @@ def transcribe_audio():
             audio_url = None
         
         try:
-            print(f" [INFO] Transcribing audio with Whisper ({WHISPER_MODEL})...")
+            is_azure = os.getenv("AZURE_OPENAI_ENDPOINT") is not None
+            provider_name = "Azure OpenAI Whisper" if is_azure else "OpenAI Whisper"
+            print(f" [INFO] Transcribing audio with {provider_name} (Deployment: {WHISPER_MODEL})...")
             
             with open(read_path, "rb") as audio:
                 result = client.audio.transcriptions.create(
@@ -645,7 +806,7 @@ def transcribe_audio():
                 )
             
             transcribed_text = result.text.strip()
-            print(f" [SUCCESS] Transcribed: {transcribed_text[:100]}...")
+            print(f" [SUCCESS] Transcribed via {provider_name}: {transcribed_text[:100]}...")
             
             return jsonify({
                 "text": transcribed_text, 
@@ -661,8 +822,10 @@ def transcribe_audio():
                     print(f"Warning: Failed to delete temp file {read_path}: {e}")
                 
     except Exception as e:
+        import traceback
         error_msg = str(e)
-        print(f" [ERROR] STT Error: {error_msg}")
+        print(f" [ERROR] STT Transcription Error: {error_msg}")
+        traceback.print_exc()
         return jsonify({"error": error_msg}), 500
 
 @app.route("/api/speak", methods=["POST"])
@@ -812,6 +975,7 @@ def start_session():
     scenario_type = data.get("scenario_type")
     mode = data.get("mode")  # Legacy support (evaluation vs coaching)
     session_mode = data.get("session_mode")  # NEW: skill_assessment, practice, mentorship
+    simulation_id = data.get("simulation_id")  # Structured simulation ID (e.g. SIM-01-PERF-001)
     
     if not role or not ai_role or not scenario: 
         return jsonify({"error": "Missing fields"}), 400
@@ -828,6 +992,7 @@ def start_session():
             "negotiation": "skill_assessment",
             "reflection": "practice",
             "mentorship": "mentorship",
+            "coaching_sim": "skill_assessment",
             "custom": "practice"
         }
         session_mode = mode_mapping.get(scenario_type, "practice")
@@ -842,6 +1007,11 @@ def start_session():
     }
     if not mode:
         mode = mode_map.get(scenario_type, "coaching")
+
+    # Simulation-specific mode override
+    if simulation_id:
+        mode = "evaluation"
+        print(f"[INFO] Simulation {simulation_id} detected, mode forced to evaluation")
 
     # Handle 'auto' framework selection
     if framework == "auto" or framework == "AUTO":
@@ -867,8 +1037,12 @@ def start_session():
     # CHARACTER MODE OVERRIDE REMOVED - Relying on scenario-based mode
     # if ai_character == "alex": ...
 
-    summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework, mode=mode, ai_character=ai_character), max_tokens=150)
+    summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework, mode=mode, ai_character=ai_character, simulation_id=simulation_id), max_tokens=150)
     summary = sanitize_llm_output(summary)
+    
+    # Override with fixed first message for structured simulations
+    if simulation_id == "SIM-01-PERF-001":
+        summary = "Thanks for taking time to meet me... I know my numbers haven't been great. I'm honestly trying, but this month also traffic was low. I'm not sure what else I can do."
     
     # Store session in memory with scenario_type, session_mode, and user_id
     session_data = {
@@ -890,6 +1064,7 @@ def start_session():
         "report_file": None,
         "user_id": user_id,  # Store user_id for ownership verification
         "ai_character": ai_character, # PERSIST CHARACTER CHOICE
+        "simulation_id": simulation_id,  # Structured simulation identifier
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
@@ -982,6 +1157,123 @@ def chat(session_id: str):
         "framework_counts": sess.get("meta", {}).get("framework_counts", {})
     })
 
+def score_simulation_session(transcript, simulation_id):
+    """Score a structured coaching simulation using LLM-based evaluation."""
+    if simulation_id != "SIM-01-PERF-001":
+        return None
+    
+    # Build transcript text for evaluation
+    transcript_text = "\n".join([
+        f"{'Manager' if t['role'] == 'user' else 'Aamir'}: {t['content']}" 
+        for t in transcript
+    ])
+    
+    scoring_prompt = f"""You are an expert coaching evaluator. Analyze this coaching conversation between a Manager and their team member Aamir (who has been underperforming for 3 months).
+
+TRANSCRIPT:
+{transcript_text}
+
+Score the Manager's coaching ability on these 6 dimensions (0-5 each):
+
+1. EMPATHY & RESPECT: Was the tone supportive, calm, and non-judgmental? Did the manager create psychological safety?
+2. CLARITY WITH FACTS: Did the manager clearly state the performance gap using data/facts without being accusatory?
+3. COACHING QUESTIONS: Did the manager ask diagnostic, open-ended questions to explore root causes? (vs. telling/lecturing)
+4. OWNERSHIP CREATION: Did the manager help shift Aamir from external excuses toward personal responsibility?
+5. ACTION PLAN QUALITY: Were specific, measurable, time-bound actions discussed and agreed upon?
+6. FOLLOW-UP DISCIPLINE: Was a review date, check-in plan, or accountability mechanism established?
+
+Also provide:
+- 2-3 STRENGTHS (what the manager did well)
+- 2-3 IMPROVEMENTS (what could be better)
+- 3 SUGGESTED BETTER MOVES (example lines the manager could have said)
+- CONVERSATION_STAGES: which of these stages were covered: [tone_setting, reality_check, explore_interactions, discover_root_causes, discuss_options, commit_actions, close_encouragement]
+
+Respond in this EXACT JSON format:
+{{
+    "scores": {{
+        "empathy_respect": {{"score": <0-5>, "reasoning": "1-2 sentence explanation citing specific evidence from the transcript"}},
+        "clarity_facts": {{"score": <0-5>, "reasoning": "1-2 sentence explanation citing specific evidence"}},
+        "coaching_questions": {{"score": <0-5>, "reasoning": "1-2 sentence explanation citing specific evidence"}},
+        "ownership_creation": {{"score": <0-5>, "reasoning": "1-2 sentence explanation citing specific evidence"}},
+        "action_plan_quality": {{"score": <0-5>, "reasoning": "1-2 sentence explanation citing specific evidence"}},
+        "followup_discipline": {{"score": <0-5>, "reasoning": "1-2 sentence explanation citing specific evidence"}}
+    }},
+    "strengths": ["strength 1", "strength 2"],
+    "improvements": ["improvement 1", "improvement 2"],
+    "suggested_moves": [
+        "Example better line 1",
+        "Example better line 2",
+        "Example better line 3"
+    ],
+    "conversation_stages": ["stage1", "stage2"]
+}}
+
+IMPORTANT: Return ONLY valid JSON, no explanation text."""
+
+    try:
+        response = llm_reply([{"role": "user", "content": scoring_prompt}], max_tokens=2000)
+        
+        # Extract JSON from response
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            result = json.loads(json_match.group())
+        else:
+            result = json.loads(response)
+        
+        # Calculate totals — handle both {score: X, reasoning: "..."} and plain number formats
+        scores = result.get("scores", {})
+        total = 0
+        for v in scores.values():
+            if isinstance(v, dict):
+                total += v.get("score", 0)
+            else:
+                total += v
+        
+        # Determine rating label
+        if total >= 24:
+            rating = "Excellent"
+        elif total >= 18:
+            rating = "Good"  
+        elif total >= 12:
+            rating = "Needs Work"
+        else:
+            rating = "Poor"
+        
+        result["overall_score"] = total
+        result["max_score"] = 30
+        result["rating_label"] = rating
+        result["simulation_id"] = simulation_id
+        result["type"] = "coaching_sim"
+        result["meta"] = {
+            "scenario_id": simulation_id,
+            "outcome_status": rating,
+            "overall_grade": f"{total}/30",
+            "summary": f"Coaching simulation scored {total}/30 ({rating})",
+            "scenario_type": "coaching_sim",
+            "session_mode": "skill_assessment"
+        }
+        
+        print(f" [SCORING] Simulation {simulation_id}: {total}/30 ({rating})")
+        return result
+        
+    except Exception as e:
+        print(f" [ERROR] Simulation scoring failed: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return a default structure on failure
+        return {
+            "scores": {
+                "empathy_respect": 0, "clarity_facts": 0,
+                "coaching_questions": 0, "ownership_creation": 0,
+                "action_plan_quality": 0, "followup_discipline": 0
+            },
+            "overall_score": 0, "max_score": 30,
+            "rating_label": "Error",
+            "strengths": [], "improvements": [],
+            "suggested_moves": [], "conversation_stages": [],
+            "simulation_id": simulation_id
+        }
+
 @app.post("/api/session/<session_id>/complete")
 def complete_session(session_id: str):
     sess = get_session(session_id)
@@ -1005,6 +1297,41 @@ def complete_session(session_id: str):
     # Get scenario_type (new) or fallback to mode (legacy)
     scenario_type = sess.get("scenario_type")
     mode = sess.get("mode", "coaching")
+    simulation_id = sess.get("simulation_id")
+    
+    # === STRUCTURED SIMULATION SCORING ===
+    if simulation_id:
+        print(f" [SIM] Scoring simulation {simulation_id}...")
+        sim_report = score_simulation_session(sess["transcript"], simulation_id)
+        if sim_report:
+            sess["report_data"] = sim_report
+            sess["simulation_report"] = sim_report
+            sess["completed"] = True
+            
+            # Save to database
+            user_id = sess.get("user_id")
+            save_session_to_db(session_id, sess, user_id=user_id)
+            
+            # Save metrics
+            try:
+                metrics = {
+                    "overall_score": sim_report.get("overall_score", 0),
+                    "max_score": sim_report.get("max_score", 30),
+                    "rating_label": sim_report.get("rating_label", ""),
+                    "scores": sim_report.get("scores", {})
+                }
+                save_report_metrics(session_id, "coaching_sim", metrics, user_id=user_id)
+            except Exception as e:
+                print(f" [ERROR] Simulation metrics save failed: {e}")
+            
+            return jsonify({
+                "message": "Simulation scored",
+                "simulation_report": sim_report,
+                "scenario_type": "coaching_sim",
+                "simulation_id": simulation_id
+            })
+    
+    # === STANDARD REPORT GENERATION ===
     
     # Generate report data if not present
     if not sess.get("report_data"):
@@ -1043,23 +1370,11 @@ def complete_session(session_id: str):
         except Exception as e:
             print(f" [WARNING] Failed to fetch user name: {e}")
 
-    # Generate PDF with unified structure
-    generate_report(
-        sess["transcript"], 
-        sess["role"], 
-        sess["ai_role"],
-        sess["scenario"], 
-        fw_display, 
-        filename=report_path,
-        mode=mode,
-        precomputed_data=sess["report_data"],
-        scenario_type=scenario_type,
-        user_name=user_name,
-        ai_character=sess.get("ai_character", "alex")
-    )
+    # We no longer generate the PDF linearly to the filesystem here.
+    # It will be generated on-the-fly during the GET request to support ephemeral production environments.
     
     sess["completed"] = True
-    sess["report_file"] = report_path
+    sess["report_file"] = "dynamic"
     
 
     
@@ -1125,17 +1440,73 @@ def view_report(session_id: str):
     if not sess: 
         return jsonify({"error": "No report"}), 404
     
-    # Try the in-memory stored path first
-    report_path = sess.get("report_file")
+    if not sess.get("report_data"):
+        return jsonify({"error": "Report data not available yet"}), 400
+        
+    import tempfile
     
-    # If not found (e.g. DB-loaded session), reconstruct the expected path
-    if not report_path or not os.path.exists(report_path):
-        report_path = os.path.join(ensure_reports_dir(), f"{session_id}_report.pdf")
-    
-    if not os.path.exists(report_path):
-        return jsonify({"error": "Report file not found"}), 404
-    
-    return send_file(report_path, mimetype='application/pdf')
+    try:
+        # Reconstruct framework data
+        try:
+            framework_data = json.loads(sess["framework"]) if sess["framework"] and sess["framework"].startswith("[") else sess["framework"]
+        except:
+            framework_data = sess["framework"]
+
+        if isinstance(framework_data, list):
+            counts = sess.get("meta", {}).get("framework_counts", {})
+            usage_str = ", ".join([f"{k}:{v}" for k,v in counts.items()])
+            fw_display = f"Multi-Framework ({usage_str})"
+        else:
+            fw_display = sess["framework"]
+
+        scenario_type = sess.get("scenario_type")
+        mode = sess.get("mode", "coaching")
+        
+        # Determine User Name
+        user_name = "Valued User"
+        user_id = sess.get("user_id")
+        if user_id and USE_DATABASE:
+            try:
+                user_res = supabase_admin.auth.admin.get_user_by_id(user_id)
+                if user_res and user_res.user:
+                    meta = user_res.user.user_metadata or {}
+                    user_name = meta.get("full_name") or meta.get("name") or meta.get("email") or "Valued User"
+            except Exception as e:
+                pass
+                
+        # Generate to temporary file, read as bytes, and delete
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp.close()
+        
+        generate_report(
+            sess["transcript"], 
+            sess["role"], 
+            sess["ai_role"],
+            sess["scenario"], 
+            fw_display, 
+            filename=tmp.name,
+            mode=mode,
+            precomputed_data=sess["report_data"],
+            scenario_type=scenario_type,
+            user_name=user_name,
+            ai_character=sess.get("ai_character", "alex")
+        )
+        
+        with open(tmp.name, "rb") as f:
+            pdf_bytes = f.read()
+            
+        os.unlink(tmp.name)
+        
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"{session_id}_report.pdf"
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.get("/api/session/<session_id>/report_data")
 def get_report_data(session_id: str):

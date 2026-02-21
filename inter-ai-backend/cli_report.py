@@ -187,6 +187,10 @@ def detect_scenario_type(scenario: str, ai_role: str, role: str) -> str:
     
     combined_text = f"{scenario_lower} {ai_role_lower} {role_lower}"
 
+    # 1. COACHING SIMULATION (New Scored Format)
+    if "good attitude, poor results" in scenario_lower or "sim-01-perf-001" in scenario_lower or "aamir" in scenario_lower or "coaching_sim" in combined_text:
+        return "coaching_sim"
+
     # 1. REFLECTION / MENTORSHIP (No Scorecard)
     # Trigger if AI is strictly a "Coach" or "Mentor" (Role-based)
     if "coach" in ai_role_lower or "mentor" in ai_role_lower:
@@ -263,15 +267,17 @@ def analyze_character_traits(transcript, role, ai_role, scenario, scenario_type)
     required_traits = required_traits_map.get(scenario_type, ["Professional Communication"])
     
     prompt = f"""
-You are analyzing a user's CHARACTER and PERSONALITY in a {scenario_type} simulation.
+You are analyzing a human player's CHARACTER and PERSONALITY in a {scenario_type} simulation.
 
-USER ROLE: {role}
-AI ROLE: {ai_role}
+CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.
+CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.
+YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF.
+
 SCENARIO: {scenario}
 
 REQUIRED TRAITS FOR SUCCESS: {', '.join(required_traits)}
 
-Analyze the user's character based on their responses:
+Analyze the human player's ('USER's') character based exclusively on their responses. (Note: Only the USER's lines have been provided for brevity).
 
 CONVERSATION:
 {conversation}
@@ -342,7 +348,7 @@ def analyze_questions_missed(transcript, role, ai_role, scenario, scenario_type)
         return {}
     
     conversation = "\n".join([
-        f"{'USER' if t['role'] == 'user' else 'AI'}: {t['content']}" 
+        f"{'USER' if t['role'] == 'user' else 'ASSISTANT'}: {t['content']}" 
         for t in transcript
     ])
     
@@ -352,14 +358,17 @@ def analyze_questions_missed(transcript, role, ai_role, scenario, scenario_type)
     prompt = f"""
 You are analyzing QUESTION QUALITY in a {scenario_type} simulation.
 
-USER ROLE: {role}
-AI ROLE: {ai_role}
+CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.
+CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.
+YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF.
+
 SCENARIO: {scenario}
 
 CONVERSATION:
 {conversation}
 
-Analyze what QUESTIONS the user SHOULD HAVE ASKED but DIDN'T.
+Analyze what QUESTIONS the human player ('USER') SHOULD HAVE ASKED but DIDN'T.
+
 
 For {scenario_type} scenarios, strong performers ask:
 - Open-ended discovery questions (to understand needs)
@@ -465,19 +474,112 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     
     unified_instruction = ""
     
-    if scenario_type == "coaching":
+    if scenario_type == "coaching_sim":
+        unified_instruction = """
+### SCENARIO: COACHING SIMULATION (Good Attitude, Poor Results)
+**GOAL**: Evaluate the manager's ability to coach an underperforming but well-meaning employee.
+**MODE**: EVALUATION (Scored Simulation).
+**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee, not a psychologist. Write in plain, encouraging English. Avoid jargon, overly academic words, or complex long-winded sentences.
+**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. Do not overwhelm the user with walls of text.
+**INSTRUCTIONS**:
+1. **BEHAVIORAL RULES**: The user must balance empathy with clear performance facts and actionable follow-ups.
+2. **SCORECARD EXACT DIMENSIONS**: You MUST output EXACTLY 6 dimensions: 'Empathy & Respect', 'Clarity with Facts', 'Coaching Questions', 'Ownership Creation', 'Action Plan Quality', 'Follow-up Discipline'. Each dimension out of 10.
+3. **TONE**: Supportive & Constructive. Focus on actionable growth.
+
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "coaching_sim", "outcome_status": "Completed/Incomplete", "overall_grade": "X/10", "summary": "Executive summary of the coaching effectiveness." },
+  "type": "coaching_sim",
+  "eq_analysis": [
+    {
+      "nuance": "Current Emotion (e.g., Empathetic but vague)",
+      "observation": "Quote proving this emotion.",
+      "suggestion": "Recommended emotional shift."
+    }
+  ],
+  "behaviour_analysis": [
+    {
+      "behavior": "Name of the behavior (e.g., Fact-Based Feedback)",
+      "quote": "The exact verbatim line from the transcript demonstrates this.",
+      "insight": "Detailed psychological breakdown of why this behavior undermines or aids growth.",
+      "impact": "Positive/Negative",
+      "improved_approach": "The exact phrase they SHOULD have used."
+    }
+  ],
+  "detailed_analysis": [
+    {"topic": "Psychological Safety Creation", "analysis": "Did they make it safe to discuss poor performance?"},
+    {"topic": "Root Cause Discovery", "analysis": "Did they ask questions to find why the employee is failing?"}
+  ],
+  "scorecard": [
+    { 
+      "dimension": "Empathy & Respect", 
+      "score": "X/10", 
+      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given.",
+      "quote": "The EXACT verbatim line from the transcript.",
+      "suggestion": "Write a simple 1-2 sentence tip on what they should try instead.",
+      "alternative_questions": [{"question": "I know you are trying...", "rationale": "Validates effort"}]
+    },
+    { 
+      "dimension": "Clarity with Facts", 
+      "score": "X/10", 
+      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given.",
+      "quote": "The EXACT verbatim line from the transcript.",
+      "suggestion": "Write a simple 1-2 sentence tip on what they should try instead.",
+      "alternative_questions": []
+    },
+    { 
+      "dimension": "Coaching Questions", 
+      "score": "X/10", 
+      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given.",
+      "quote": "The EXACT verbatim line from the transcript.",
+      "suggestion": "Write a simple 1-2 sentence tip on what they should try instead.",
+      "alternative_questions": []
+    },
+    { 
+      "dimension": "Ownership Creation", 
+      "score": "X/10", 
+      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given.",
+      "quote": "The EXACT verbatim line from the transcript.",
+      "suggestion": "Write a simple 1-2 sentence tip on what they should try instead.",
+      "alternative_questions": []
+    },
+    { 
+      "dimension": "Action Plan Quality", 
+      "score": "X/10", 
+      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given.",
+      "quote": "The EXACT verbatim line from the transcript.",
+      "suggestion": "Write a simple 1-2 sentence tip on what they should try instead.",
+      "alternative_questions": []
+    },
+    { 
+      "dimension": "Follow-up Discipline", 
+      "score": "X/10", 
+      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given.",
+      "quote": "The EXACT verbatim line from the transcript.",
+      "suggestion": "Write a simple 1-2 sentence tip on what they should try instead.",
+      "alternative_questions": []
+    }
+  ],
+  "strengths": ["Write a detailed 1-2 sentence description of strength 1", "Write a detailed 1-2 sentence description of strength 2"],
+  "missed_opportunities": ["Write a detailed 1-2 sentence description of missed opportunity 1", "Write a detailed 1-2 sentence description of missed opportunity 2"],
+  "actionable_tips": ["Write a detailed 1-2 sentence paragraph for Tactic 1", "Write a detailed 1-2 sentence paragraph for Tactic 2"]
+}
+"""
+
+    elif scenario_type == "coaching":
         if is_user_performer: # User is STAFF
             unified_instruction = """
 ### SCENARIO: COACHABILITY ASSESSMENT (USER IS STAFF)
 **GOAL**: Evaluate the user's openness to feedback and their ability to pivot behavior.
 **MODE**: EVALUATION (Growth-Oriented Assessment).
-**CRITICAL RULE**: IF YOU GIVE A LOW SCORE OR IDENTIFY A WEAKNESS, YOU MUST EXPLAIN "WHY" USING A DIRECT QUOTE.
+**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee. Write in plain, encouraging English. Avoid jargon, overly academic words, or complex long-winded sentences.
+**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. 
 **INSTRUCTIONS**:
-1. **BEHAVIORAL ANALYSIS**: Focus on *micro-signals* (tone, pauses, word choice). Go deep into the psychological "why".
+1. **BEHAVIORAL ANALYSIS**: Focus on simple communication signals (tone, pauses, word choice). 
 2. **SCORECARD**: Every score MUST have a "Proof" (quote) and a "Growth Tactic" (specific alternative action).
-3. **JUSTIFY WEAKNESS**: If the user is "weak", do not just say they were defensive. Say: "You were defensive because when I asked X, you replied 'It's not my fault' (Turn 4). This destroys trust."
-4. **ACTIONABLE TIPS**: Do NOT give generic advice (e.g., "Listen better"). Give specific DRILLS (e.g., "Use the 'Looping' technique: Repeat back the last 3 words...").
-5. **TONE**: Constructive, Encouraging, but Direct. "Tough Love".
+3. **JUSTIFY WEAKNESS**: Keep it simple. "You seemed defensive when I asked X, because you replied [quote]."
+4. **ACTIONABLE TIPS**: Do NOT give generic advice (e.g., "Listen better"). Give specific 1-2 sentence DRILLS.
+5. **TONE**: Supportive & Constructive. Focus on actionable growth.
 
 **OUTPUT JSON STRUCTURE**:
 {
@@ -507,39 +609,39 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     { 
       "dimension": "Professionalism", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. Start with 'You scored X/10 because...' then cite specific evidence. If they made a mistake, explicitly state WHAT THEY SAID WRONG and WHY it was problematic.",
+      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given. Cite specific evidence.",
       "quote": "The EXACT verbatim line from the transcript that demonstrates this dimension (good or bad).",
-      "suggestion": "Start with 'Instead of saying [what they said], you should say: [exact alternative phrase].' Be specific and actionable. If they did well, suggest how to refine it further.",
+      "suggestion": "Write a simple 1-2 sentence tip explaining what they should say next time.",
       "alternative_questions": [{"question": "I appreciate that perspective...", "rationale": "Validates before disagreeing"}]
     },
     { 
       "dimension": "Ownership", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. If they deflected responsibility, say EXACTLY how they deflected it (quote required). If they owned it, show the evidence.",
+      "reasoning": "Write a clear, 1-2 sentence explanation. Show exactly how they handled responsibility.",
       "quote": "The line where they accepted or dodged responsibility. Must be verbatim.",
-      "suggestion": "Tell them EXACTLY what to say next time. Example: 'Instead of deflecting with excuse X, say: That's on me, here's my plan...' Be ultra-specific.",
+      "suggestion": "Write a simple 1-2 sentence tip telling them what to say next time.",
       "alternative_questions": [{"question": "That's on me, here is my plan...", "rationale": "Total accountability"}]
     },
     { 
       "dimension": "Active Listening", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. If they interrupted or failed to acknowledge, provide the exact moment. If they listened well, prove it with evidence.",
+      "reasoning": "Write a clear, 1-2 sentence explanation of whether they listened or interrupted.",
       "quote": "Evidence of listening (e.g., a reflective statement) or interrupting (the exact interruption).",
-      "suggestion": "Prescribe the EXACT listening technique. Example: 'When they said X, instead of jumping to Y, you should have said: So what you're seeing is... [mirror back their concern].'",
+      "suggestion": "Write a simple 1-2 sentence tip prescribing a better listening technique.",
       "alternative_questions": [{"question": "So what you're seeing is...", "rationale": "Reflective listening loop"}]
     },
     { 
       "dimension": "Solution Focus", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. If their solution was vague or reactive, show the exact quote and explain what was missing. If strong, prove it.",
+      "reasoning": "Write a clear, 1-2 sentence explanation about the quality of their proposed solutions.",
       "quote": "The specific proposal they made (verbatim).",
-      "suggestion": "Give them the EXACT alternative approach. Example: 'Instead of proposing X, frame it as: What does success look like to you in this area?' Teach them a better script.",
+      "suggestion": "Write a simple 1-2 sentence tip giving an alternative approach.",
       "alternative_questions": [{"question": "What does success look like to you?", "rationale": "Collaborative problem solving"}]
     }
   ],
-  "strengths": ["Specific, high-impact strength observed..."],
-  "missed_opportunities": ["Specific moment where they could have won..."],
-  "actionable_tips": ["Tactic 1 (Do this tomorrow)...", "Tactic 2 (Mindset shift)..."]
+  "strengths": ["Write a detailed 1-2 sentence description of high-impact strength 1...", "Write a detailed 1-2 sentence description of high-impact strength 2..."],
+  "missed_opportunities": ["Write a detailed 1-2 sentence description of missed opportunity 1...", "Write a detailed 1-2 sentence description of missed opportunity 2..."],
+  "actionable_tips": ["Write a detailed 1-2 sentence paragraph for Tactic 1...", "Write a detailed 1-2 sentence paragraph for Tactic 2..."]
 }
 """
         else: # User is MANAGER (Evaluator -> Mentorship)
@@ -590,13 +692,13 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 ### SCENARIO: SALES PERFORMANCE ASSESSMENT (USER IS SELLER)
 **GOAL**: Generate a High-Performance Sales Audit.
 **MODE**: EVALUATION (Commercial Excellence).
-**CRITICAL RULE**: NO GENERIC FEEDBACK. PROVE YOUR CLAIMS WITH EVIDENCE.
+**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee. Write in plain, encouraging English. Avoid jargon, overly complex words, or long-winded sentences.
+**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. Do not overwhelm the user with walls of text.
 **INSTRUCTIONS**:
 1. **REVENUE FOCUS**: Evaluate every behavior based on its likelihood to CLOSE THE DEAL or KILL THE DEAL.
 2. **EVIDENCE**: You cannot give a score without citing the exact quote that justifies it.
-3. **JUSTIFY THE LOSS**: If they lost the deal or scored low, explain precisely WHERE they lost it. (e.g., "You lost the deal in Turn 3 when you ignored the budget objection.")
-4. **GROWTH**: If a score is low, you must provide the *exact script* or *tactic* that would have worked.
-5. **RECOMMENDATIONS**: Must be commercially focused and specific. "Ask open questions" is bad. "Ask 'How does this impact your Q3 goals?'" is good.
+3. **JUSTIFY THE LOSS**: If they lost the deal, explain exactly where they lost it in 1-2 sentences. 
+4. **RECOMMENDATIONS**: Must be commercially focused and specific. "Ask open questions" is bad. "Ask 'How does this impact your Q3 goals?'" is good.
 
 **OUTPUT JSON STRUCTURE**:
 {
@@ -630,45 +732,45 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     { 
       "dimension": "Rapport Building", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. Did they build genuine rapport or come across as transactional? Show the exact evidence.",
+      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
       "quote": "The exact rapport attempt (or lack thereof). Must be verbatim from transcript.",
-      "suggestion": "Tell them EXACTLY what to say instead. Example: 'Instead of immediately pitching, say: I noticed you mentioned X on LinkedIn, how's that project going?' Be ultra-specific.",
+      "suggestion": "Write a simple 1-2 sentence tip telling them EXACTLY what to say instead.",
       "alternative_questions": [{"question": "I noticed you... How is that impacting X?", "rationale": "Connects observation to business pain"}]
     },
     { 
       "dimension": "Needs Discovery", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. Did they ask deep discovery questions or skip straight to pitching? Cite the exact moment they succeeded or failed.",
+      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given. Did they ask good questions?",
       "quote": "The critical discovery question asked or missed. Must be word-for-word from the transcript.",
-      "suggestion": "Give them the EXACT question they should have asked. Example: 'Instead of asking about budget first, say: What happens if you don't solve this problem in the next 6 months?' Teach SPIN.",
+      "suggestion": "Write a simple 1-2 sentence tip giving them the EXACT question they should have asked.",
       "alternative_questions": [{"question": "What happens if you don't solve this?", "rationale": "Implication question (SPIN)"}]
     },
     { 
       "dimension": "Value Articulation", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. Did they articulate value in terms of customer outcomes or just list features? Show the evidence.",
+      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
       "quote": "The value pitch. Exact words from transcript.",
-      "suggestion": "Prescribe the EXACT value statement. Example: 'Instead of saying our product has X feature, say: Based on what you told me about Y challenge, here's how Z capability directly solves that.' Connect benefit to pain.",
+      "suggestion": "Write a simple 1-2 sentence tip prescribing the EXACT value statement.",
       "alternative_questions": [{"question": "Based on what you said about X, here is how Y helps...", "rationale": "Direct solution mapping"}]
     },
     { 
       "dimension": "Objection Handling", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. Did they defend, deflect, or acknowledge the objection? Cite the exact exchange.",
+      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
       "quote": "Their response to the pushback. Word-for-word.",
-      "suggestion": "Give them the EXACT objection handling script. Example: 'Instead of saying It's worth it, use Feel-Felt-Found: I understand how you feel, others felt the same way until they found that X resulted in Y ROI.' Be specific.",
+      "suggestion": "Write a simple 1-2 sentence tip giving them the EXACT objection handling script.",
       "alternative_questions": [{"question": "It sounds like cost is a major factor...", "rationale": "Labeling the objection"}]
     },
     { 
       "dimension": "Closing", 
       "score": "X/10", 
-      "reasoning": "PROVE WHY this score was given. Did they ask for the business or leave it vague? Show the exact closing attempt (or lack thereof).",
+      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
       "quote": "The closing line. Must be verbatim.",
-      "suggestion": "Give them the EXACT close. Example: 'Instead of saying Let me know what you think, try an assumptive close: When should we schedule the kickoff call for next week?' Be direct and specific.",
+      "suggestion": "Write a simple 1-2 sentence tip giving them the EXACT close.",
       "alternative_questions": [{"question": "Does it make sense to start the paperwork?", "rationale": "Assumptive Close"}]
     }
   ],
-  "sales_recommendations": ["Commercial Insight 1...", "Commercial Insight 2..."]
+  "sales_recommendations": ["Write a detailed 3-4 sentence paragraph for Commercial Insight 1...", "Write a detailed 3-4 sentence paragraph for Commercial Insight 2...", "Write a detailed 3-4 sentence paragraph for Commercial Insight 3..."]
 }
 """
         else: # User is BUYER (Evaluator -> Mentorship)
@@ -864,16 +966,20 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     # Unified System Prompt
     system_prompt = (
         f"### SYSTEM ROLE\\n"
-        f"You are {ai_character.title() if ai_character else 'The AI'}, an expert Soft Skills Coach. You just facilitated a simulation where you played the role of '{ai_role}' and the user played '{role}'. now, analyze the performance based on your direct interaction.\\n"
+        f"You are {ai_character.title() if ai_character else 'The AI'}, an expert Soft Skills Coach. You just facilitated a roleplay simulation.\\n"
+        f"CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.\\n"
+        f"CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.\\n"
+        f"YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF ('ASSISTANT').\\n"
         f"Context: {scenario}\\n"
-        f"User Role: {role} | AI Role: {ai_role}\\n"
         f"{analyst_persona}\\n"
         f"{unified_instruction}\\n"
         f"### GENERAL RULES\\n"
-        "2. **JUSTIFICATION**: Do not just say 'Good job'. Explain 'You scored 8/10 because you asked X question at the start...'.\\n"
-        "3. **DEPTH**: Avoid surface-level observations. Analyze subtext, tone, and strategy.\\n"
-        "4. **EQ & NUANCE**: You MUST include the 'eq_analysis' section. Identify the user's *current emotion/tone* (nuance) and provide a specific *emotional adjustment* (suggestion) to improve.\\n"
-        "5. OUTPUT MUST BE VALID JSON ONLY.\\n"
+        "1. **STRICT TRANSCRIPT GROUNDING**: You MUST base EVERY score and insight SOLELY on the words the user actually spoke in the transcript below. DO NOT hallucinate, assume, or invent interactions that did not happen.\\n"
+        "2. **VERBATIM QUOTES**: Every scorecard dimension and behavior analysis MUST contain an exact, verbatim quote from the transcript proving your point. If the user failed a dimension because they didn't do it, state: 'You did not attempt this.'\\n"
+        "3. **JUSTIFICATION**: Do not just say 'Good job'. Explain 'You scored 8/10 because you asked X question at the start...'.\\n"
+        "4. **DEPTH**: Avoid surface-level observations. Analyze subtext, tone, and strategy based on their explicit word choices.\\n"
+        "5. **EQ & NUANCE**: You MUST include the 'eq_analysis' section. Identify the user's *current emotion/tone* and provide a specific *emotional adjustment* to improve.\\n"
+        "6. **FORMAT**: OUTPUT MUST BE VALID JSON ONLY.\\n"
     )
 
     try:
@@ -1353,13 +1459,13 @@ class DashboardPDF(FPDF):
             if 'positive' in impact.lower(): impact_color = COLORS['success']
             elif 'negative' in impact.lower(): impact_color = COLORS['danger']
             
-            # Estimate height
-            height = 35 # Base height
-            if quote: height += 10
-            if insight: height += len(insight) // 90 * 5 + 5
-            if improved: height += len(improved) // 90 * 5 + 10
+            # Estimate height conservatively
+            height = 15 # Base height
+            if quote: height += int(len(quote) / 75 + 1) * 5 + 5
+            if insight: height += int(len(insight) / 75 + 1) * 5 + 5
+            if improved: height += int(len(improved) / 75 + 1) * 5 + 12
             
-            self.check_space(height + 5)
+            self.check_space(height + 10)
             
             start_y = self.get_y()
             
@@ -1371,7 +1477,7 @@ class DashboardPDF(FPDF):
             self.set_fill_color(248, 250, 252)
             self.rect(12, start_y, 188, height, 'F')
             
-            current_y = start_y + 2
+            current_y = start_y + 3
             
             # Header: Behavior + Impact
             self.set_xy(15, current_y)
@@ -1411,9 +1517,9 @@ class DashboardPDF(FPDF):
                 # Draw a highlight box for the correction
                 correction_y = self.get_y()
                 self.set_fill_color(240, 249, 255) # Light blue bg
-                # Calculate height roughly
-                lines = max(1, len(improved) // 90)
-                box_h = lines * 5 + 4
+                # Calculate height safely
+                lines = int(len(improved) / 75) + 1
+                box_h = lines * 5 + 5
                 self.rect(15, correction_y, 180, box_h, 'F')
                 
                 self.set_xy(17, correction_y + 2) # Indent slightly inside box
@@ -1422,8 +1528,187 @@ class DashboardPDF(FPDF):
                 self.multi_cell(175, 5, improved, align='J')
                 current_y = self.get_y() + 4
 
-            # Bottom Spacer
-            self.set_y(start_y + height + 4)
+            # Bottom Spacer (safely preventing overlap)
+            self.set_y(max(self.get_y(), start_y + height) + 4)
+
+    def draw_detailed_analysis(self, items):
+        """Draw the Deep Dive Analysis section."""
+        if not items: return
+        
+        self.check_space(60)
+        self.ln(5)
+        self.draw_section_header("DEEP DIVE ANALYSIS", COLORS['accent'])
+        
+        if isinstance(items, list):
+            for item in items:
+                topic = sanitize_text(item.get('topic', ''))
+                analysis = sanitize_text(item.get('analysis', ''))
+                
+                if not topic and not analysis: continue
+                
+                # Estimate height
+                height = 15
+                if analysis: height += len(analysis) // 90 * 5
+                
+                self.check_space(height + 10)
+                
+                # Topic Header
+                self.set_font('Arial', 'B', 10)
+                self.set_text_color(*COLORS['accent'])
+                self.cell(0, 6, topic.upper(), 0, 1)
+                
+                # Left border for analysis content
+                start_y = self.get_y()
+                self.set_fill_color(*COLORS['accent'])
+                self.rect(10, start_y, 1, height - 5, 'F')
+                
+                # Analysis Text
+                self.set_xy(15, start_y)
+                self.set_font('Arial', '', 9)
+                self.set_text_color(*COLORS['text_main'])
+                self.multi_cell(180, 5, analysis)
+                self.ln(4)
+        elif isinstance(items, str):
+            # If it's a raw string instead of an array
+            self.set_font('Arial', '', 9)
+            self.set_text_color(*COLORS['text_main'])
+            self.multi_cell(0, 5, sanitize_text(items))
+            self.ln(4)
+
+    def draw_question_analysis(self, analysis):
+        """Draw the Questions You Should Have Asked section."""
+        if not analysis: return
+        questions = analysis.get('questions_missed', [])
+        if not questions: return
+        
+        self.check_space(70)
+        self.ln(5)
+        self.draw_section_header("QUESTIONS YOU SHOULD HAVE ASKED", COLORS['primary'])
+        
+        # Draw Quality Score Summary if present
+        score = analysis.get('question_quality_score')
+        feedback = analysis.get('question_quality_feedback')
+        tip = analysis.get('questioning_improvement_tip')
+        
+        if score or feedback or tip:
+            self.set_fill_color(248, 250, 252) # Light slate
+            self.rect(10, self.get_y(), 190, 35, 'F')
+            
+            summary_y = self.get_y() + 4
+            self.set_xy(15, summary_y)
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(*COLORS['text_light'])
+            self.cell(100, 5, "QUESTION QUALITY SCORE", 0, 0)
+            
+            if score:
+                self.set_font('Arial', 'B', 14)
+                self.set_text_color(*COLORS['primary'])
+                self.cell(75, 5, str(score), 0, 1, 'R')
+            else:
+                self.ln(5)
+                
+            if feedback:
+                self.set_xy(15, self.get_y() + 2)
+                self.set_font('Arial', '', 9)
+                self.set_text_color(*COLORS['text_main'])
+                self.multi_cell(180, 5, sanitize_text(feedback))
+                
+            if tip:
+                self.set_xy(15, self.get_y() + 2)
+                self.set_font('Arial', 'B', 9)
+                self.set_text_color(*COLORS['accent'])
+                self.multi_cell(180, 5, f"TIP: {sanitize_text(tip)}")
+                
+            self.ln(6)
+            
+        # Group Questions by Timing
+        timings = ['Early', 'Mid', 'Late', 'Uncategorized']
+        grouped_questions = {t: [] for t in timings}
+        
+        for q in questions:
+            timing = q.get('timing', 'Uncategorized')
+            if timing not in grouped_questions: 
+                timing = 'Uncategorized'
+            grouped_questions[timing].append(q)
+            
+        for timing in timings:
+            timing_qs = grouped_questions[timing]
+            if not timing_qs: continue
+            
+            if timing != 'Uncategorized':
+                self.check_space(20)
+                self.set_font('Arial', 'B', 9)
+                self.set_text_color(*COLORS['text_light'])
+                self.cell(0, 8, f"{timing.upper()} CONVERSATION", 0, 1)
+                
+            for q in timing_qs:
+                question_text = sanitize_text(q.get('question', ''))
+                category = sanitize_text(q.get('category', ''))
+                why = sanitize_text(q.get('why_important', ''))
+                when = sanitize_text(q.get('when_to_ask', ''))
+                impact = sanitize_text(q.get('impact_if_asked', ''))
+                
+                # Base height calculation
+                h = 10
+                if why: h += len(why) // 90 * 5 + 5
+                if when: h += len(when) // 90 * 5 + 5
+                if impact: h += len(impact) // 90 * 5 + 5
+                
+                self.check_space(h + 15)
+                start_q_y = self.get_y()
+                
+                # Border Box
+                self.set_draw_color(226, 232, 240)
+                self.rect(10, start_q_y, 190, h, 'D')
+                
+                # Question Line
+                self.set_xy(15, start_q_y + 4)
+                self.set_font('Arial', 'BI', 10)
+                self.set_text_color(*COLORS['text_main'])
+                self.multi_cell(140, 5, f'"{question_text}"')
+                
+                # Category Badge (Right Aligned roughly)
+                if category:
+                    badge_y = start_q_y + 4
+                    self.set_xy(160, badge_y)
+                    self.set_font('Arial', 'B', 8)
+                    self.set_text_color(*COLORS['accent'])
+                    self.cell(35, 5, f"[{category.upper()}]", 0, 0, 'R')
+                    
+                cur_y = self.get_y() + 2
+                
+                # Details
+                self.set_font('Arial', '', 8)
+                if why:
+                    self.set_xy(15, cur_y)
+                    self.set_text_color(*COLORS['primary'])
+                    self.set_font('Arial', 'B', 8)
+                    self.cell(15, 5, "WHY:", 0, 0)
+                    self.set_font('Arial', '', 8)
+                    self.set_text_color(*COLORS['text_main'])
+                    self.multi_cell(160, 5, why)
+                    cur_y = self.get_y()
+                    
+                if when:
+                    self.set_xy(15, cur_y)
+                    self.set_text_color(*COLORS['success'])
+                    self.set_font('Arial', 'B', 8)
+                    self.cell(15, 5, "WHEN:", 0, 0)
+                    self.set_font('Arial', '', 8)
+                    self.set_text_color(*COLORS['text_main'])
+                    self.multi_cell(160, 5, when)
+                    cur_y = self.get_y()
+                    
+                if impact:
+                    self.set_xy(15, cur_y)
+                    self.set_text_color(*COLORS['warning'])
+                    self.set_font('Arial', 'B', 8)
+                    self.cell(15, 5, "IMPACT:", 0, 0)
+                    self.set_font('Arial', '', 8)
+                    self.set_text_color(*COLORS['text_main'])
+                    self.multi_cell(160, 5, impact)
+                    
+                self.set_y(start_q_y + h + 4)
 
     def draw_eq_analysis(self, eq_data):
         """Draw the Emotional Intelligence & Nuance section."""
@@ -1458,12 +1743,12 @@ class DashboardPDF(FPDF):
             # The user's provided `if not observation: continue_text(...)` line is problematic and will be omitted
             # as it's syntactically incorrect and its intent is unclear given the context.
             
-            # Estimate height
-            height = 25
-            if observation: height += len(observation) // 90 * 5 + 5 # Changed 'proof' to 'observation'
-            if suggestion: height += len(suggestion) // 90 * 5 + 10
+            # Estimate height conservatively
+            height = 15
+            if observation: height += int(len(observation) / 75 + 1) * 5 + 5 
+            if suggestion: height += int(len(suggestion) / 75 + 1) * 5 + 10
             
-            self.check_space(height + 5)
+            self.check_space(height + 10)
             start_y = self.get_y()
             
             # Background
@@ -1492,14 +1777,15 @@ class DashboardPDF(FPDF):
             # Draw suggestion
             if suggestion:
                 self.set_text_color(100, 116, 139)
-                self.cell(20, 5, "SUGGESTION:", 0, 0)
+                self.cell(0, 5, "SUGGESTION:", 0, 1) # Auto move to next line
                 
                 self.set_font('Arial', '', 9)
                 self.set_text_color(*COLORS['text_main'])
-                self.multi_cell(160, 5, suggestion)
+                self.set_x(15)
+                self.multi_cell(180, 5, suggestion)
                 current_y = self.get_y() + 4
             
-            self.set_y(start_y + height + 3)
+            self.set_y(max(self.get_y(), start_y + height) + 4)
 
     def draw_section_header(self, title, color):
         self.ln(3)
@@ -1925,22 +2211,47 @@ class DashboardPDF(FPDF):
             score = str(item.get('score', 'N/A'))
             desc = sanitize_text(item.get('description', ''))
             
-            row_height = max(14, len(desc) // 70 * 5 + 10)
-            self.check_space(row_height)
+            if not desc:
+                r = sanitize_text(item.get('reasoning', ''))
+                q = sanitize_text(item.get('quote', ''))
+                s = sanitize_text(item.get('suggestion', ''))
+                parts = []
+                if r: parts.append(r)
+                if q: parts.append(f"Quote: \"{q}\"")
+                if s: parts.append(f"Tip: {s}")
+                desc = "\n".join(parts)
             
-            # Zebra striping
+            # Calculate height accurately by counting physical chars per line and explicit newlines
+            lines_estimate = sum(max(1, len(line)/70) for line in desc.split('\n'))
+            
+            alt_qs = item.get('alternative_questions', [])
+            if alt_qs:
+                lines_estimate += 1.5 # "TRY ASKING INSTEAD:" + padding
+                for aq in alt_qs:
+                    q_text = aq.get('question', '')
+                    if q_text:
+                        lines_estimate += max(1, len(q_text) / 70)
+            
+            row_height = max(14, int(lines_estimate * 5 + 6))
+            
+            self.check_space(row_height + 5)
+            
+            x_start = self.get_x()
+            y_start = self.get_y()
+            
+            # Zebra striping explicitly via Rect to wrap entire content block
             if i % 2 == 0:
                 self.set_fill_color(248, 250, 252) # Very light gray
             else:
                 self.set_fill_color(255, 255, 255) # White
+                
+            self.rect(x_start, y_start, 190, row_height, 'F')
             
             self.set_font('Arial', 'B', 9)
             self.set_text_color(*COLORS['text_main'])
             
-            # Draw row background
-            x_start = self.get_x()
-            y_start = self.get_y()
-            self.cell(50, row_height, dim, 0, 0, 'L', True)
+            self.set_xy(x_start, y_start)
+            self.cell(50, row_height, dim, 0, 0, 'L')
             
             # Score Color
             try:
@@ -1951,27 +2262,21 @@ class DashboardPDF(FPDF):
             except:
                 self.set_text_color(*COLORS['text_main'])
                 
-            self.cell(20, row_height, score, 0, 0, 'C', True)
+            self.cell(20, row_height, score, 0, 0, 'C')
             
             self.set_font('Arial', '', 9)
             self.set_text_color(*COLORS['text_light'])
             
-            # Multi-cell handling with background fill
-            self.set_xy(x_start + 70, y_start)
-            self.multi_cell(120, row_height, desc, border=0, align='L', fill=True)
-            
-            # Reset position for next row manually if multi_cell didn't perfectly align
-            self.set_xy(x_start, y_start + row_height)
-            self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height) # Bottom border
-            self.set_text_color(*COLORS['text_main']) # Reset color
+            # Multi-cell handling (no background fill, proper 5mm line height)
+            self.set_xy(x_start + 70, y_start + 2)
+            self.multi_cell(120, 5, desc, border=0, align='L', fill=False)
             
             # Alternative Questions / Try Asking Instead
-            alt_qs = item.get('alternative_questions', [])
             if alt_qs:
                 self.set_font('Arial', 'B', 8)
                 self.set_text_color(*COLORS['accent'])
-                self.set_xy(x_start + 70, self.get_y() + 2)
-                self.cell(40, 4, "TRY ASKING INSTEAD:", 0, 1)
+                self.set_x(x_start + 70)
+                self.cell(40, 5, "TRY ASKING INSTEAD:", 0, 1)
                 
                 self.set_font('Arial', 'I', 8)
                 self.set_text_color(*COLORS['text_main'])
@@ -1979,9 +2284,13 @@ class DashboardPDF(FPDF):
                     q_text = aq.get('question', '')
                     if q_text:
                         self.set_x(x_start + 70)
-                        self.multi_cell(120, 4, f"- \"{sanitize_text(q_text)}\"", 0, 'L')
-                
-                self.ln(2) # Extra spacing after alts
+                        self.multi_cell(120, 5, f"- \"{sanitize_text(q_text)}\"", 0, 'L')
+            
+            # Reset position for next row exactly at row_height boundary
+            self.set_xy(x_start, y_start + row_height)
+            self.set_draw_color(226, 232, 240)
+            self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height) # Bottom border
+            self.set_text_color(*COLORS['text_main']) # Reset color
 
     def draw_radar_chart(self, scorecard):
         """Draw a radar chart for the scorecard dimensions."""
@@ -2215,20 +2524,56 @@ class DashboardPDF(FPDF):
 
     def draw_coaching_report(self, data):
         self.draw_scorecard(data.get('scorecard', []))
-        self.draw_key_value_grid("BEHAVIORAL SIGNALS", data.get('behavioral_signals', {}))
         
+        # Optional Legacy Section
+        if 'behavioral_signals' in data and not data.get('behaviour_analysis'):
+           self.draw_key_value_grid("BEHAVIORAL SIGNALS", data.get('behavioral_signals', {}))
+        
+        if 'coaching_impact' in data:
+            self.draw_key_value_grid("COACHING IMPACT", data.get('coaching_impact', {}), COLORS['purple'])
+            
         # Use 2-Column Layout for Strengths/Weaknesses
         self.draw_two_column_lists(
             "KEY STRENGTHS", data.get('strengths', []), COLORS['success'],
             "MISSED OPPORTUNITIES", data.get('missed_opportunities', []), COLORS['warning']
         )
-        
-        self.draw_key_value_grid("COACHING IMPACT", data.get('coaching_impact', {}), COLORS['purple'])
+            
         self.draw_list_section("ACTIONABLE TIPS", data.get('actionable_tips', []), COLORS['accent'], "->")
+
+    def draw_coaching_sim_report(self, data):
+        # Format "scores" from dict into a list expected by draw_assessment_table or draw_scorecard
+        scores_dict = data.get('scores', {})
+        scorecard_list = []
+        for raw_key, value in scores_dict.items():
+            dim = raw_key.replace('_', ' ').title()
+            is_obj = isinstance(value, dict)
+            num_val = float(value.get('score', 0)) if is_obj else float(value)
+            reason = value.get('reasoning', '') if is_obj else ''
+            # Output out of 5 but PDF system often expects string /10 or similar
+            scorecard_list.append({
+                'dimension': dim,
+                'score': f"{num_val}/5",
+                'description': reason
+            })
+            
+        self.draw_scorecard(scorecard_list)
+        
+        self.draw_two_column_lists(
+            "KEY STRENGTHS", data.get('strengths', []), COLORS['success'],
+            "AREAS FOR IMPROVEMENT", data.get('improvements', []), COLORS['warning']
+        )
+        
+        self.draw_list_section("SUGGESTED BETTER MOVES", data.get('suggested_moves', []), COLORS['accent'], "->")
+        
+        stages = data.get('conversation_stages', [])
+        if stages:
+            self.draw_list_section("CONVERSATION STAGES COVERED", stages, COLORS['accent'], "✓")
 
     def draw_assessment_report(self, data):
         self.draw_scorecard(data.get('scorecard', []))
-        self.draw_key_value_grid("SIMULATION ANALYSIS", data.get('simulation_analysis', {}))
+            
+        if 'simulation_analysis' in data:
+            self.draw_key_value_grid("SIMULATION ANALYSIS", data.get('simulation_analysis', {}))
         
         # Use 2-Column Layout
         self.draw_two_column_lists(
@@ -2236,7 +2581,9 @@ class DashboardPDF(FPDF):
             "LIMITATIONS", data.get('what_limited_effectiveness', []), COLORS['danger']
         )
         
-        self.draw_key_value_grid("REVENUE IMPACT", data.get('revenue_impact', {}), COLORS['danger'])
+        if 'revenue_impact' in data:
+            self.draw_key_value_grid("REVENUE IMPACT", data.get('revenue_impact', {}), COLORS['danger'])
+            
         self.draw_list_section("RECOMMENDATIONS", data.get('sales_recommendations', []), COLORS['accent'])
 
     def draw_learning_report(self, data):
@@ -2361,7 +2708,7 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     stype = str(scenario_type).lower()
     
     try:
-        if 'coaching' in stype:
+        if 'coaching_sim' in stype or 'coaching' in stype:
             pdf.draw_coaching_report(data)
             pdf.draw_scoring_methodology() # Add methodology for coaching
         elif 'sales' in stype or 'negotiation' in stype:

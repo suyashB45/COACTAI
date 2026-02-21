@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Mic, Square, ArrowLeft, Clock, User, Bot, Send, Sparkles, History, X } from "lucide-react"
+import { Mic, Square, ArrowLeft, Clock, User, Bot, Send, Sparkles, History, X, Loader2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { getApiUrl } from "@/lib/api"
 
@@ -241,7 +241,8 @@ export default function Conversation() {
 
                     const response = await fetch(getApiUrl('/api/transcribe'), {
                         method: 'POST',
-                        body: formData
+                        body: formData,
+                        signal: abortControllerRef.current?.signal
                     })
 
                     if (!response.ok) throw new Error('Whisper API failed')
@@ -369,13 +370,22 @@ export default function Conversation() {
     const handleEndConversation = async () => {
         if (isEnding) return // Prevent double-clicks
         setIsEnding(true)
-        setShowEndConfirm(false)
 
+        // Aggressively kill AI Speech
         if (aiAudioRef.current) {
             aiAudioRef.current.pause()
+            aiAudioRef.current.currentTime = 0
         }
+        setIsAiSpeaking(false)
+
+        // Aggressively kill network requests
         if (abortControllerRef.current) {
             abortControllerRef.current.abort()
+        }
+
+        // Aggressively kill microphone without triggering transcription
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.onstop = null
         }
         stopRecording()
 
@@ -393,12 +403,17 @@ export default function Conversation() {
                 }
                 localStorage.setItem(`session_${sessionId}`, JSON.stringify(updated))
             }
+
+            // Navigate ONLY after the report generation is complete
+            navigate(`/report/${sessionId}`)
+
         } catch (error) {
             console.error("Error completing session:", error)
             toast.error("Error", { description: "Failed to complete session. Navigating to report anyway." })
+            setIsEnding(false)
+            setShowEndConfirm(false)
+            navigate(`/report/${sessionId}`) // Optional: still try to navigate if we want them to see partial data/error state
         }
-
-        navigate(`/report/${sessionId}`)
     }
 
     // Get the latest message for captioning
@@ -605,8 +620,8 @@ export default function Conversation() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
                                 className={`backdrop-blur-xl border rounded-2xl p-5 sm:p-6 shadow-lg max-h-[200px] overflow-y-auto ${lastMessage.role === 'assistant'
-                                        ? 'bg-primary/5 border-primary/20'
-                                        : 'bg-card/80 border-border'
+                                    ? 'bg-primary/5 border-primary/20'
+                                    : 'bg-card/80 border-border'
                                     }`}
                             >
                                 <div className="flex items-center gap-2 mb-3">
@@ -625,8 +640,8 @@ export default function Conversation() {
                                     )}
                                 </div>
                                 <p className={`text-base sm:text-lg leading-relaxed ${lastMessage.role === 'assistant'
-                                        ? 'text-foreground font-medium'
-                                        : 'text-muted-foreground'
+                                    ? 'text-foreground font-medium'
+                                    : 'text-muted-foreground'
                                     }`}>
                                     {lastMessage.content}
                                 </p>
@@ -762,7 +777,7 @@ export default function Conversation() {
 
             {/* End Session Confirmation Modal */}
             <AnimatePresence>
-                {showEndConfirm && (
+                {showEndConfirm && !isEnding && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center">
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -790,6 +805,7 @@ export default function Conversation() {
                                     <Button
                                         variant="ghost"
                                         onClick={() => setShowEndConfirm(false)}
+                                        disabled={isEnding}
                                         className="flex-1 rounded-xl border border-border hover:bg-muted/20 font-semibold"
                                     >
                                         Cancel
@@ -797,12 +813,41 @@ export default function Conversation() {
                                     <Button
                                         variant="destructive"
                                         onClick={handleEndConversation}
-                                        className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20"
+                                        disabled={isEnding}
+                                        className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 flex items-center justify-center gap-2"
                                     >
                                         Yes, End Session
                                     </Button>
                                 </div>
                             </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Full Page Generation Loader */}
+            <AnimatePresence>
+                {isEnding && (
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-background/80 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="relative bg-card border border-primary/20 rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl shadow-primary/10 flex flex-col items-center text-center"
+                        >
+                            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+                                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                            </div>
+                            <h3 className="text-2xl font-bold text-foreground mb-2">Generating Report</h3>
+                            <p className="text-muted-foreground text-sm leading-relaxed">
+                                Please wait while our AI analyzes your conversation, determines your scorecard, and compiles actionable feedback. This may take up to 20 seconds.
+                            </p>
                         </motion.div>
                     </div>
                 )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { Download, AlertCircle, Target, History, Zap, Award, BookOpen, MessageSquare, ChevronRight, Check, X, ArrowLeft, Clock, CheckCircle2, AlertTriangle, Brain, Quote, Lightbulb } from "lucide-react"
+import { Download, AlertCircle, Target, History, Zap, Award, BookOpen, MessageSquare, ChevronRight, Check, X, AlertTriangle, ArrowLeft, Clock, CheckCircle2, Brain, Quote, Lightbulb } from "lucide-react"
 import { motion, Variants } from "framer-motion"
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts"
 
@@ -65,7 +65,7 @@ interface CoachingReportData extends GenericReportData {
     strengths: string[]
     missed_opportunities: string[]
     actionable_tips: string[]
-    eq_analysis?: { nuance: string; proof: string; suggestion: string }[]
+    eq_analysis?: { nuance: string; proof?: string; observation?: string; suggestion: string }[]
 }
 
 // Scenario 2: Sales
@@ -215,7 +215,7 @@ export default function Report() {
     const type = (data.type || data.meta.scenario_type || 'custom').toLowerCase()
 
     const renderContent = () => {
-        if (type.includes('coaching')) return <CoachingView data={data as CoachingReportData} />
+        if (type.includes('coaching_sim') || type.includes('coaching')) return <CoachingView data={data as CoachingReportData} />
         if (type.includes('sales') || type.includes('negotiation')) return <SalesView data={data as SalesReportData} />
         if (type.includes('learning') || type.includes('reflection') || type.includes('mentorship')) return <LearningView data={data as LearningReportData} />
         return <CustomView data={data as GenericReportData} />
@@ -389,7 +389,7 @@ const ScenarioContextSection = ({ scenario }: { scenario: string }) => {
     )
 }
 
-const EQAnalysisSection = ({ items }: { items?: { nuance: string; proof: string; suggestion: string }[] }) => {
+const EQAnalysisSection = ({ items }: { items?: { nuance: string; proof?: string; observation?: string; suggestion: string }[] }) => {
     if (!items || items.length === 0) return null
     return (
         <GlassCard>
@@ -399,10 +399,10 @@ const EQAnalysisSection = ({ items }: { items?: { nuance: string; proof: string;
                     <div key={i} className="p-4 rounded-xl bg-pink-500/5 border border-pink-500/10">
                         <h3 className="font-bold text-lg text-pink-600 mb-2">{item.nuance}</h3>
                         <div className="space-y-3">
-                            {item.proof && (
+                            {(item.proof || item.observation) && (
                                 <div className="flex gap-2 text-sm text-foreground/80">
                                     <span className="font-bold text-xs uppercase text-slate-500 mt-1">Proof:</span>
-                                    <span className="italic">"{item.proof}"</span>
+                                    <span className="italic">"{(item.proof || item.observation)}"</span>
                                 </div>
                             )}
                             {item.suggestion && (
@@ -845,3 +845,4 @@ const CustomView = ({ data }: { data: GenericReportData }) => (
         )}
     </div>
 )
+
