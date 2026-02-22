@@ -63,7 +63,8 @@ except Exception as e:
     USE_DATABASE = False
 
 # Enable CORS
-flask_cors.CORS(app)
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+flask_cors.CORS(app, origins=cors_origins)
 
 # ---------------------------------------------------------
 # In-Memory Storage (Fallback if Database not available)
