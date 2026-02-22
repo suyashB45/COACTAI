@@ -162,7 +162,7 @@ export default function Practice() {
             setIsStartingSession(true)
             setStartingScenarioTitle(data.title || 'custom')
             // Call backend to create session
-            const response = await fetch(getApiUrl('/session/start'), {
+            const response = await fetch(getApiUrl('/api/session/start'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -958,7 +958,7 @@ def detect_session_mode(scenario: str, ai_role: str) -> str:
     print(" [INFO] Defaulting to LEARNING mode (no clear indicators)")
     return "learning"
 
-@app.post("/session/start")
+@app.post("/api/session/start")
 def start_session():
     print("[DEBUG] Entered /session/start", flush=True)
     # Audio cleanup logic removed
