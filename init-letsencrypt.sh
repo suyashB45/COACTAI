@@ -3,7 +3,7 @@
 # init-letsencrypt.sh
 # Automated SSL Certificate Setup for CoAct.AI
 
-domains=(coact-ai.com www.coact-ai.com)
+domains=(coact-ai.com www.coact-ai.com coact-ai.centralindia.cloudapp.azure.com)
 email="coactai@outlook.com"
 data_path="./certbot"
 rsa_key_size=4096
@@ -52,7 +52,7 @@ echo "Requesting real certificates from Let's Encrypt..."
 docker compose run --rm --entrypoint "\
   certbot certonly --webroot -w /var/www/certbot \
     --email $email \
-    -d ${domains[0]} -d ${domains[1]} \
+    $(for d in "${domains[@]}"; do echo -d "$d"; done) \
     --rsa-key-size $rsa_key_size \
     --agree-tos \
     --force-renewal \
