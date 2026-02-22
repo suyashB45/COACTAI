@@ -34,33 +34,10 @@ supabase_admin: Client = create_client(url, service_key) if service_key else sup
 from cli_report import generate_report, llm_reply, analyze_full_report_data, detect_scenario_type, build_summary_prompt
 
 # Database Models
-USE_DATABASE = True
+USE_DATABASE = False # Database persistence removed per user request
 
-# Create Flask app first (always needed)
+# Create Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-
-try:
-    from models import init_db, get_session_by_id, create_session, update_session, save_report_metrics, get_user_history, db
-    
-    # Configure Database URI
-    # Default to the service name 'db' from docker-compose
-    # Default to the Supabase connection provided
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://postgres:Coact%40ai2026@db.apcvglomdnhqfffznbyn.supabase.co:6543/postgres?sslmode=require')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    # optimized for 30+ concurrent users
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        "pool_size": 20,        # Handle 20 simultaneous DB connections
-        "max_overflow": 10,     # Allow 10 more if pool is full
-        "pool_recycle": 1800,   # Recycle connections every 30 mins
-        "pool_pre_ping": True,  # Check connection liveness before using
-    }
-    
-    init_db(app)
-    print(" [SUCCESS] Database connection established")
-except Exception as e:
-    print(f" [WARNING] Database initialization failed: {e}")
-    USE_DATABASE = False
 
 # Enable CORS
 cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
@@ -75,20 +52,7 @@ SESSIONS: Dict[str, Dict[str, Any]] = {}
 # Hybrid Storage Helper Functions
 # ---------------------------------------------------------
 def get_session(session_id: str) -> Dict[str, Any]:
-    """Get session from database or in-memory storage."""
-    # Always check DB first if available to ensure fresh state across workers
-    if USE_DATABASE:
-        try:
-            db_session = get_session_by_id(session_id)
-            if db_session:
-                # Convert to dict and cache in memory (but DB is source of truth)
-                session_data = db_session.to_dict()
-                SESSIONS[session_id] = session_data
-                return session_data
-        except Exception as e:
-            print(f"Database lookup error: {e}")
-
-    # Fallback to in-memory (legacy or if DB fails)
+    """Get session from in-memory storage."""
     if session_id in SESSIONS:
         return SESSIONS[session_id]
     
@@ -126,38 +90,6 @@ def verify_session_ownership(session_id: str, user_id: str = None) -> bool:
     
     # Compare user IDs (convert to string for comparison)
     return str(session_user_id) == str(user_id)
-
-def save_session_to_db(session_id: str, session_data: dict, user_id: int = None):
-    """Save session to database (async-safe)."""
-    if not USE_DATABASE:
-        return
-    
-    try:
-        print(f"[DEBUG] Saving session {session_id} to DB (User: {user_id})...")
-        # We need an app context for threading
-        with app.app_context():
-            db_session = get_session_by_id(session_id)
-            if db_session:
-                # Update existing
-                update_session(session_id, {
-                    "transcript": session_data.get("transcript", []),
-                    "report_data": session_data.get("report_data", {}),
-                    "behaviour_analysis": session_data.get("report_data", {}).get("behaviour_analysis", []),
-                    "status": "completed" if session_data.get("completed") else "active"
-                })
-            else:
-                # Create new
-                create_session(session_id, {
-
-                    "role": session_data.get("role"),
-                    "ai_role": session_data.get("ai_role"),
-                    "scenario_type": session_data.get("scenario_type", "custom"),
-                    "title": session_data.get("title"), # Save title
-                    "mode": session_data.get("session_mode", "practice"),  # NEW: session mode
-                    "transcript": session_data.get("transcript", [])
-                }, user_id=user_id)
-    except Exception as e:
-        print(f"Database save error: {e}")
 
 # ---------------------------------------------------------
 # Configuration & Paths
@@ -720,8 +652,17 @@ def get_history():
         if not user:
             return jsonify({"error": "Invalid token"}), 401
             
-        sessions = get_user_history(user.id)
-        return jsonify([s.to_dict() for s in sessions])
+        # Filter sessions in memory by user_id
+        user_id_str = str(user.id)
+        user_sessions = [
+            s for s in SESSIONS.values() 
+            if str(s.get("user_id")) == user_id_str
+        ]
+        
+        # Sort by created_at desc (newest first)
+        user_sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        return jsonify(user_sessions)
         
     except Exception as e:
         print(f"[ERROR] Failed to fetch history: {e}")
@@ -1069,9 +1010,6 @@ def start_session():
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
-    
-    # Save to database
-    save_session_to_db(session_id, session_data, user_id=user_id)
 
     return jsonify({
         "session_id": session_id, 
@@ -1148,9 +1086,6 @@ def chat(session_id: str):
         
     # Persist response
     sess["transcript"].append({"role": "assistant", "content": raw_response})
-    
-    # Save to database
-    save_session_to_db(session_id, sess)
  
     return jsonify({
         "follow_up": clean_response, 
@@ -1309,22 +1244,6 @@ def complete_session(session_id: str):
             sess["simulation_report"] = sim_report
             sess["completed"] = True
             
-            # Save to database
-            user_id = sess.get("user_id")
-            save_session_to_db(session_id, sess, user_id=user_id)
-            
-            # Save metrics
-            try:
-                metrics = {
-                    "overall_score": sim_report.get("overall_score", 0),
-                    "max_score": sim_report.get("max_score", 30),
-                    "rating_label": sim_report.get("rating_label", ""),
-                    "scores": sim_report.get("scores", {})
-                }
-                save_report_metrics(session_id, "coaching_sim", metrics, user_id=user_id)
-            except Exception as e:
-                print(f" [ERROR] Simulation metrics save failed: {e}")
-            
             return jsonify({
                 "message": "Simulation scored",
                 "simulation_report": sim_report,
@@ -1379,60 +1298,6 @@ def complete_session(session_id: str):
     
 
     
-    # --- PERSISTENCE LAYER ---
-    try:
-        # 1. Save full JSON report to practice_history
-        save_session_to_db(session_id, sess, user_id=user_id)
-        
-        # 2. Extract and save structured metrics to specific tables
-        metrics = {}
-        report_data = sess["report_data"]
-        
-        if scenario_type == "sales":
-            # Extract scores from scorecard dimensions
-            for item in report_data.get("scorecard", []):
-                dim = item.get("dimension", "").lower()
-                score_str = item.get("score", "0/10").split("/")[0]
-                try:
-                    score = float(score_str)
-                except:
-                    score = 0.0
-                    
-                if "rapport" in dim:
-                    metrics["rapport_building_score"] = score
-                elif "value" in dim:
-                    metrics["value_articulation_score"] = score
-                elif "objection" in dim:
-                    metrics["objection_handling_score"] = score
-                    
-        elif scenario_type == "coaching":
-            # Extract overall grade
-            try:
-                grade_str = report_data.get("meta", {}).get("overall_grade", "0/10").split("/")[0]
-                metrics["overall_score"] = float(grade_str)
-            except:
-                metrics["overall_score"] = 0.0
-            
-            # Estimate other scores from behavioral signals if possible (mapping High/Med/Low)
-            signals = report_data.get("behavioral_signals", {})
-            def map_signal(val):
-                return 10.0 if "High" in val else 5.0 if "Medium" in val else 2.0
-            
-            metrics["empathy_score"] = map_signal(signals.get("emotional_safety", ""))
-            metrics["psych_safety_score"] = map_signal(signals.get("staff_openness", ""))
-
-        elif scenario_type == "learning":
-            metrics["skill_focus_areas"] = report_data.get("skill_focus_areas", [])
-            metrics["practice_suggestions"] = report_data.get("practice_plan", [])
-
-        # Save to specific analytics tables
-        save_report_metrics(session_id, scenario_type, metrics, user_id=user_id)
-        
-    except Exception as e:
-        print(f" [ERROR] DB Persistence Error: {e}")
-        import traceback
-        traceback.print_exc()
-
     return jsonify({"message": "Report generated", "report_file": report_path, "scenario_type": scenario_type})
 
 @app.get("/api/report/<session_id>")
